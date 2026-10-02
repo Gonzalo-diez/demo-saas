@@ -1,0 +1,1 @@
+ALLOWED_CHECK_STATUSES = {"pendiente", "depositado", "acreditado", "rechazado"}

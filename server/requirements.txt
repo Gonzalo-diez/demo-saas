@@ -1,0 +1,60 @@
+# --- API ---
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.9
+
+# --- DB ---
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# --- Config ---
+pydantic-settings==2.2.1
+python-dotenv==1.0.1
+
+# --- Data / Excel ---
+pandas==2.2.2
+openpyxl==3.1.2
+
+# --- Jobs async ---
+redis==5.0.4
+rq==1.16.2
+
+# --- Utils ---
+python-dateutil==2.9.0
+
+# --- Auth ---
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.2
+email-validator==2.2.0
+
+# --- cloudinary ---
+cloudinary==1.44.1
+
+# --- Rate Limiting ---
+slowapi==0.1.9
+
+# --- Reportlab ---
+reportlab==4.4.10
+
+# --- Gemini ---
+google-genai==1.73.1
+
+# --- PDF ---
+pdfplumber==0.11.9
+pyzbar==0.1.9
+opencv-python-headless==4.13.0.92
+pymupdf==1.27.2.2
+
+# --- H3 ---
+h3==4.4.2
+
+# --- API ---
+httpx==0.28.1
+
+# --- Apscheduler ---
+APScheduler==3.11.2
+
+# --- Phone Number Parsing ---
+phonenumbers==9.0.36

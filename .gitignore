@@ -1,0 +1,94 @@
+# =========================
+# ROOT / GENERAL
+# =========================
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.pid
+*.seed
+*.pid.lock
+
+# =========================
+# ENV FILES
+# =========================
+.env
+.env.*
+!.env.example
+
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# =========================
+# FRONTEND / NEXT
+# =========================
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+frontend/.vercel/
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# =========================
+# BACKEND / PYTHON
+# =========================
+backend/__pycache__/
+backend/**/*.py[cod]
+backend/**/*.pyo
+backend/**/*.pyd
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.coverage
+backend/htmlcov/
+
+backend/.venv/
+backend/venv/
+backend/env/
+
+# SQLite / local db
+backend/*.db
+backend/*.sqlite3
+
+# Alembic cache only
+backend/alembic/versions/__pycache__/
+
+# =========================
+# DOCKER
+# =========================
+backend/docker-compose.override.yml
+
+# =========================
+# IDE / EDITOR
+# =========================
+.vscode/
+.idea/
+backend/.vscode/
+frontend/.vscode/
+
+# =========================
+# CACHE / TEMP
+# =========================
+.cache/
+tmp/
+temp/
+
+# =========================
+# UPLOADS / MEDIA
+# =========================
+backend/uploads/
+backend/media/
+backend/static/
+frontend/uploads/

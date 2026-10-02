@@ -1,0 +1,1 @@
+ALLOWED_PURCHASE_QUOTE_STATUSES = {"draft", "sent", "approved", "rejected", "expired"}

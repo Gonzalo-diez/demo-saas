@@ -1,0 +1,1 @@
+ALLOWED_PURCHASE_INVOICE_STATUSES = {"draft", "confirmed", "cancelled"}
