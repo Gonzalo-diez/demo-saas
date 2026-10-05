@@ -5,15 +5,18 @@ export type ShopProduct = {
   description: string | null;
   brand: string | null;
   category: string | null;
+  category_id?: number | null;
   unit_price: number;
   currency: string;
   image_url: string | null;
   sku: string | null;
-  is_active: boolean;
+  /** La vista de tienda solo devuelve productos publicados: puede no venir. */
+  is_active?: boolean;
   stock_current: number;
   is_in_stock?: boolean;
-  created_at: string;
-  updated_at: string;
+  /** La vista de tienda no los incluye (solo el personal ve las fechas). */
+  created_at?: string;
+  updated_at?: string;
 };
 
 // Respuesta de la API para el catálogo
@@ -52,6 +55,7 @@ export type GetProductsShopParams = {
   search?: string;
   brand?: string;
   category?: string;
+  category_id?: number;
   is_active?: boolean;
   page?: number;
   page_size?: number;

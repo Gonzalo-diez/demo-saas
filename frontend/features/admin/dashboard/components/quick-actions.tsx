@@ -15,8 +15,6 @@ const QUICK_ACTION_HREFS = [
   "/admin/purchase-invoices",
   "/admin/suppliers",
   "/admin/sales-reps",
-  "/admin/client-map",
-  "/admin/sales-rep-map",
   "/admin/analytics",
 ];
 
@@ -31,8 +29,6 @@ const DESCRIPTIONS: Record<string, string> = {
   "/admin/purchase-invoices": "Facturación de compras",
   "/admin/suppliers": "Gestión de proveedores",
   "/admin/sales-reps": "Equipo comercial",
-  "/admin/client-map": "Clientes en el mapa",
-  "/admin/sales-rep-map": "Vendedores en el mapa",
   "/admin/analytics": "Métricas y reportes",
 };
 

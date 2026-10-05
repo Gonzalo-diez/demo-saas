@@ -63,46 +63,49 @@ export function ProductCard({ product, salesRepId }: Props) {
       ref={cardRef}
       className="group flex h-full flex-col overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md"
     >
-      {/* Imagen */}
-      <div className="relative flex h-40 w-full items-center justify-center bg-muted sm:h-48 md:h-52">
+      {/* Contenedor de la imagen integrado */}
+      <div className="relative aspect-square w-full overflow-hidden bg-card p-3">
         {product.image_url ? (
           <Image
             src={product.image_url}
             alt={product.name}
             fill
-            className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            unoptimized={!product.image_url.startsWith("https://res.cloudinary.com/")}
+            className="object-contain p-2 mix-blend-multiply transition-transform duration-300 group-hover:scale-105"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
         ) : (
-          <svg
-            className="h-10 w-10 text-muted-foreground/40"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1}
-            aria-hidden="true"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="1.5" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <path d="M21 15l-5-5L5 21" strokeWidth="1.5" />
-          </svg>
+          <div className="flex h-full items-center justify-center">
+            <svg
+              className="h-10 w-10 text-muted-foreground/40"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1}
+              aria-hidden="true"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="1.5" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" strokeWidth="1.5" />
+            </svg>
+          </div>
         )}
 
         {/* Badge de categoría sobre la imagen */}
         {product.category && (
-          <span className="absolute left-2.5 top-2.5 rounded-full bg-card/90 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--brand)] backdrop-blur-sm">
+          <span className="absolute left-2.5 top-2.5 z-10 rounded-full bg-muted/80 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--brand)] backdrop-blur-sm">
             {product.category}
           </span>
         )}
       </div>
 
       {/* Cuerpo */}
-      <div className="flex flex-1 flex-col p-3 sm:p-4">
+      <div className="flex flex-1 flex-col p-3 pt-0 sm:p-4 sm:pt-0">
         <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-medium leading-snug sm:text-base">
           {product.name}
         </h3>
 
-        <div className="space-y-3">
+        <div className="mt-auto space-y-3 pt-2">
           <p className="text-lg font-bold sm:text-xl">
             ${product.unit_price.toLocaleString("es-AR")}
           </p>

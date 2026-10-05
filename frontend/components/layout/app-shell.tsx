@@ -10,6 +10,7 @@ import { useLogout } from "@/features/admin/auth/hooks/use-auth";
 import { NAV_ITEMS, PAGE_TITLES } from "@/constants/navigation";
 // Importamos la campanita de notificaciones
 import { NotificationBell } from "@/features/admin/notifications/components/notification-bell";
+import { TenantBrand } from "@/features/tenant/components/tenant-brand";
 
 type AppShellProps = { children: ReactNode };
 
@@ -33,16 +34,11 @@ function SidebarContent({
       {/* Logo */}
       <div
         className={cn(
-          "flex shrink-0 items-center gap-2.5 border-b px-3 py-3",
+          "flex shrink-0 items-center gap-3 border-b border-sidebar-border px-3 py-4",
           collapsed && "justify-center px-2",
         )}
       >
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-xs font-bold text-background">
-          DC
-        </span>
-        {!collapsed && (
-          <span className="truncate text-sm font-semibold">Distri Choco</span>
-        )}
+        <TenantBrand hideName={collapsed} />
       </div>
 
       {/* Nav */}
@@ -60,13 +56,13 @@ function SidebarContent({
                 onClick={onNavigate}
                 title={collapsed ? item.label : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-md text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-xl text-sm font-medium transition-colors",
                   collapsed
                     ? "justify-center px-2 py-2.5"
                     : "justify-start px-3 py-2.5",
                   isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    ? "bg-sidebar-primary font-semibold text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <Icon
@@ -82,7 +78,7 @@ function SidebarContent({
       {/* Footer — logout */}
       <div
         className={cn(
-          "shrink-0 border-t p-2",
+          "shrink-0 border-t border-sidebar-border p-2",
           collapsed && "flex justify-center",
         )}
       >
@@ -92,7 +88,7 @@ function SidebarContent({
           disabled={isLoggingOut}
           title="Cerrar sesión"
           className={cn(
-            "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-destructive disabled:opacity-50",
+            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-kraft disabled:opacity-50",
             collapsed && "w-auto justify-center px-2",
           )}
         >
@@ -153,12 +149,12 @@ export function AppShell({ children }: AppShellProps) {
   const handleLogout = () => logout.mutate();
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-background">
       <div className="flex min-h-screen">
         {/* Sidebar desktop */}
         <aside
           className={cn(
-            "hidden border-r bg-background transition-[width] duration-200 lg:block lg:sticky lg:top-0 lg:h-screen lg:overflow-hidden",
+            "hidden bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:block lg:sticky lg:top-0 lg:h-screen lg:overflow-hidden",
             collapsed ? "w-[56px]" : "w-60",
           )}
         >
@@ -179,18 +175,14 @@ export function AppShell({ children }: AppShellProps) {
               className="fixed inset-0 z-40 bg-black/50 lg:hidden"
               onClick={() => setMobileOpen(false)}
             />
-            <aside className="fixed inset-y-0 left-0 z-50 flex w-[72vw] max-w-64 flex-col border-r bg-background shadow-xl lg:hidden">
-              <div className="flex items-center justify-between border-b px-3 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-xs font-bold text-background">
-                    DC
-                  </span>
-                  <span className="text-sm font-semibold">Distri Choco</span>
-                </div>
+            <aside className="fixed inset-y-0 left-0 z-50 flex w-[72vw] max-w-64 flex-col bg-sidebar text-sidebar-foreground shadow-xl lg:hidden">
+              <div className="flex items-center justify-between border-b border-sidebar-border px-3 py-3">
+                <TenantBrand />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
+                  className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
                   onClick={() => setMobileOpen(false)}
                   aria-label="Cerrar menú"
                 >
@@ -210,7 +202,7 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Contenido principal */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+          <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur">
             <div className="flex h-14 min-w-0 items-center justify-between px-3 sm:px-4 lg:h-16 lg:px-5">
               {/* Lado izquierdo: Botones y Título */}
               <div className="flex min-w-0 items-center gap-2">
@@ -237,7 +229,7 @@ export function AppShell({ children }: AppShellProps) {
                   <CollapseIcon className="size-4" />
                 </Button>
 
-                <h1 className="truncate text-sm font-semibold sm:text-base">
+                <h1 className="truncate text-lg font-bold sm:text-xl">
                   {currentTitle}
                 </h1>
               </div>
@@ -249,7 +241,7 @@ export function AppShell({ children }: AppShellProps) {
             </div>
           </header>
 
-          <main className="flex-1 p-3 sm:p-4 lg:p-6">{children}</main>
+          <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
         </div>
       </div>
     </div>

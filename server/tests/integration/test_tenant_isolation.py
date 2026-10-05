@@ -19,6 +19,7 @@ from app.db.tenant_context import (
     tenant_scope,
     unscoped,
 )
+from app.models.admin_model import Admin
 from app.models.client_model import Client
 from app.models.product_model import Product
 from app.models.sales_rep_model import SalesRep
@@ -31,7 +32,7 @@ from app.models.tenant_model import Tenant
 
 def _make_tenant(db, *, name, slug, is_active=True) -> Tenant:
     with unscoped(db):
-        tenant = Tenant(name=name, slug=slug, is_active=is_active)
+        tenant = Tenant(name=name, slug=slug, domain=f"{slug}.localhost", is_active=is_active)
         db.add(tenant)
         db.flush()
     return tenant
@@ -67,6 +68,11 @@ def _make_client(db, tenant, *, email) -> Client:
 
 def _bearer(rep: SalesRep) -> dict:
     token = create_access_token(str(rep.id), tenant_id=rep.tenant_id)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _admin_bearer(admin: Admin) -> dict:
+    token = create_access_token(str(admin.id), token_type="platform_admin")
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -331,7 +337,12 @@ class TestDataIsolation:
 
     def test_client_token_is_scoped_too(self, client, db, tenant, tenant_b, rep_b):
         cb = _make_client(db, tenant_b, email="comercio@b.com")
-        client.post("/api/products/", json=_product_payload("B-1"), headers=_bearer(rep_b))
+        cat = client.post("/api/categories/", json={"name": "Pilas", "image_url": "https://example.com/p.jpg"}, headers=_bearer(rep_b)).json()
+        client.post(
+            "/api/products/",
+            json={**_product_payload("B-1"), "category": None, "category_id": cat["id"]},
+            headers=_bearer(rep_b),
+        )
         token = create_access_token(str(cb.id), token_type="client", tenant_id=tenant_b.id)
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -369,36 +380,115 @@ class TestDataIsolation:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestPlatformAdmin:
-    KEY = "clave-de-plataforma-de-test"
+    """Las distribuidoras las gestiona un admin de plataforma (tabla admins)."""
 
-    @pytest.fixture(autouse=True)
-    def _platform_key(self, monkeypatch):
-        from app.core import dependencies
-        monkeypatch.setattr(dependencies.settings, "PLATFORM_ADMIN_KEY", self.KEY)
+    @pytest.fixture
+    def admin(self, db):
+        a = Admin(name="Plataforma", email="root@platform.com",
+                  hashed_password=get_password_hash("rootpass123"), is_active=True)
+        db.add(a)
+        db.flush()
+        return a
 
-    def test_tenant_management_requires_platform_key(self, client, db, rep_a):
-        assert client.get("/api/tenants/").status_code == 403
-        assert client.get("/api/tenants/", headers={"X-Platform-Key": "otra"}).status_code == 403
+    @pytest.fixture
+    def headers(self, admin):
+        return _admin_bearer(admin)
+
+    def test_tenant_management_requires_platform_admin(self, client, db, rep_a, admin):
+        assert client.get("/api/tenants/").status_code == 401
         # Un superusuario de una distribuidora NO es admin de la plataforma.
-        assert client.get("/api/tenants/", headers=_bearer(rep_a)).status_code == 403
+        assert client.get("/api/tenants/", headers=_bearer(rep_a)).status_code == 401
         assert client.post(
             "/api/tenants/", json={"name": "X", "slug": "x"}, headers=_bearer(rep_a)
+        ).status_code == 401
+        assert client.patch("/api/tenants/1/deactivate").status_code == 401
+
+    def test_platform_admin_token_is_useless_in_tenant_routes(self, client, db, rep_a, admin):
+        h = _admin_bearer(admin)
+        assert client.get("/api/sales-reps/me", headers=h).status_code == 401
+        assert client.get("/api/tenants/me", headers=h).status_code == 401
+        # El catálogo es público: con un token que no es de la tienda se lo trata como visitante
+        # anónimo (solo lo publicado), nunca como personal.
+        assert client.get("/api/products/", headers=h).status_code == 200
+
+    def test_inactive_platform_admin_is_rejected(self, client, db, admin):
+        admin.is_active = False
+        db.flush()
+        assert client.get("/api/tenants/", headers=_admin_bearer(admin)).status_code == 403
+
+    def test_platform_admin_login_and_me(self, client, db, admin):
+        bad = client.post("/api/admin/login", json={"email": "root@platform.com", "password": "mala"})
+        assert bad.status_code == 401
+        ok = client.post("/api/admin/login", json={"email": "root@platform.com", "password": "rootpass123"})
+        assert ok.status_code == 200
+        token = ok.cookies.get(settings.PLATFORM_AUTH_COOKIE_NAME)
+        claims = jose_jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALG])
+        assert claims["type"] == "platform_admin" and "tenant_id" not in claims
+        # La cookie de plataforma es distinta de la de distribuidora
+        assert settings.AUTH_COOKIE_NAME not in ok.cookies
+        assert client.get("/api/admin/me").json()["email"] == "root@platform.com"
+
+    def test_platform_admin_cannot_remove_self(self, client, db, admin, headers):
+        assert client.patch(f"/api/admin/users/{admin.id}", json={"is_active": False}, headers=headers).status_code == 400
+        assert client.delete(f"/api/admin/users/{admin.id}", headers=headers).status_code == 400
+
+    def test_create_second_platform_admin(self, client, db, admin, headers):
+        resp = client.post(
+            "/api/admin/users",
+            json={"name": "Otro", "email": "otro@platform.com", "password": "otro12345"},
+            headers=headers,
+        )
+        assert resp.status_code == 201
+        assert client.post(
+            "/api/admin/users",
+            json={"name": "Dup", "email": "otro@platform.com", "password": "otro12345"},
+            headers=headers,
+        ).status_code == 409
+
+    def test_tenant_creates_its_own_sales_reps_and_they_stay_inside(self, client, db, headers):
+        client.post(
+            "/api/tenants/",
+            json={"name": "Nueva A", "slug": "nueva-a", "domain": "nueva-a.localhost", "admin_email": "o@a.com", "admin_password": "secret123"},
+            headers=headers,
+        )
+        client.post(
+            "/api/tenants/",
+            json={"name": "Nueva B", "slug": "nueva-b", "domain": "nueva-b.localhost", "admin_email": "o@b.com", "admin_password": "secret123"},
+            headers=headers,
+        )
+        login = client.post("/api/sales-reps/login", json={"email": "o@a.com", "password": "secret123"},
+                            headers={"X-Tenant-Slug": "nueva-a"})
+        assert login.status_code == 200
+        owner_a = {"Authorization": f"Bearer {login.cookies.get(settings.AUTH_COOKIE_NAME)}"}
+
+        created = client.post(
+            "/api/sales-reps/",
+            json={"name": "Vendedor", "email": "v@a.com", "password": "vend12345"},
+            headers=owner_a,
+        )
+        assert created.status_code == 201
+        assert created.json()["is_superuser"] is False
+
+        # El vendedor entra solo a su distribuidora y no puede crear más vendedores
+        assert client.post("/api/sales-reps/login", json={"email": "v@a.com", "password": "vend12345"},
+                           headers={"X-Tenant-Slug": "nueva-b"}).status_code == 401
+        v = client.post("/api/sales-reps/login", json={"email": "v@a.com", "password": "vend12345"},
+                        headers={"X-Tenant-Slug": "nueva-a"})
+        assert v.status_code == 200
+        v_headers = {"Authorization": f"Bearer {v.cookies.get(settings.AUTH_COOKIE_NAME)}"}
+        assert client.post(
+            "/api/sales-reps/",
+            json={"name": "X", "email": "x@a.com", "password": "vend12345"},
+            headers=v_headers,
         ).status_code == 403
-        assert client.patch("/api/tenants/1/deactivate").status_code == 403
 
-    def test_disabled_when_key_not_configured(self, client, monkeypatch):
-        from app.core import dependencies
-        monkeypatch.setattr(dependencies.settings, "PLATFORM_ADMIN_KEY", None)
-        assert client.get("/api/tenants/", headers={"X-Platform-Key": ""}).status_code == 403
-        assert client.get("/api/tenants/", headers={"X-Platform-Key": "None"}).status_code == 403
-
-    def test_provision_new_distributor_with_admin_and_login(self, client, db):
-        headers = {"X-Platform-Key": self.KEY}
+    def test_provision_new_distributor_with_admin_and_login(self, client, db, headers):
         resp = client.post(
             "/api/tenants/",
             json={
                 "name": "Distribuidora Nueva",
                 "slug": "nueva",
+                "domain": "https://Tienda.Nueva.com/catalogo",
                 "admin_email": "dueño@nueva.com",
                 "admin_password": "secret123",
                 "admin_name": "Dueño",
@@ -407,6 +497,7 @@ class TestPlatformAdmin:
         )
         assert resp.status_code == 201, resp.text
         new_id = resp.json()["id"]
+        assert resp.json()["domain"] == "tienda.nueva.com"  # se guarda solo el host
 
         login = client.post(
             "/api/sales-reps/login",
@@ -422,24 +513,22 @@ class TestPlatformAdmin:
         listing = client.get("/api/tenants/", headers=headers).json()
         assert {t["slug"] for t in listing["items"]} >= {"test", "nueva"}
 
-    def test_provision_rejects_duplicates_and_bad_slugs(self, client, db):
-        headers = {"X-Platform-Key": self.KEY}
-        assert client.post("/api/tenants/", json={"name": "Otra", "slug": "test"}, headers=headers).status_code == 409
-        assert client.post("/api/tenants/", json={"name": "Otra", "slug": "Mi Slug!"}, headers=headers).status_code == 422
+    def test_provision_rejects_duplicates_and_bad_slugs(self, client, db, headers):
+        assert client.post("/api/tenants/", json={"name": "Otra", "slug": "test", "domain": "otra.localhost"}, headers=headers).status_code == 409
+        assert client.post("/api/tenants/", json={"name": "Otra", "slug": "Mi Slug!", "domain": "otra.localhost"}, headers=headers).status_code == 422
         # admin_email sin password
         assert client.post(
             "/api/tenants/",
-            json={"name": "Otra", "slug": "otra", "admin_email": "a@b.com"},
+            json={"name": "Otra", "slug": "otra", "domain": "otra.localhost", "admin_email": "a@b.com"},
             headers=headers,
         ).status_code == 422
 
     def test_public_slug_lookup_hides_sensitive_data(self, client, db, tenant_b):
         resp = client.get("/api/tenants/slug/dist-b")
         assert resp.status_code == 200
-        assert set(resp.json()) == {"id", "name", "slug", "logo_url"}
+        assert set(resp.json()) == {"id", "name", "slug", "domain", "logo_url"}
 
-    def test_deactivate_blocks_everything(self, client, db, tenant_b, rep_b):
-        headers = {"X-Platform-Key": self.KEY}
+    def test_deactivate_blocks_everything(self, client, db, tenant_b, rep_b, headers):
         assert client.patch(f"/api/tenants/{tenant_b.id}/deactivate", headers=headers).status_code == 200
 
         assert client.get("/api/sales-reps/me", headers=_bearer(rep_b)).status_code == 403

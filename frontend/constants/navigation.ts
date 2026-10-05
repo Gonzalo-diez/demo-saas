@@ -3,16 +3,15 @@ import {
   Package,
   ArrowLeftRight,
   Users,
-  MapPin,
   FileText,
   Truck,
   ShoppingCart,
   ClipboardList,
   UserCheck,
-  Map,
   BarChart2,
   Wallet,
   Landmark,
+  Tags,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,18 +36,18 @@ export const NAV_ITEMS: NavigationItem[] = [
     icon: Package,
   },
   {
+    href: "/admin/categories",
+    label: "Categorías",
+    shortLabel: "Cat",
+    icon: Tags,
+  },
+  {
     href: "/admin/inventory-movements",
     label: "Movimientos de inventario",
     shortLabel: "Stock",
     icon: ArrowLeftRight,
   },
   { href: "/admin/clients", label: "Clientes", shortLabel: "Cli", icon: Users },
-  {
-    href: "/admin/client-map",
-    label: "Mapa clientes",
-    shortLabel: "Mapa Clientes",
-    icon: MapPin,
-  },
   {
     href: "/admin/sales",
     label: "Ventas",
@@ -92,12 +91,6 @@ export const NAV_ITEMS: NavigationItem[] = [
     icon: UserCheck,
   },
   {
-    href: "/admin/sales-rep-map",
-    label: "Mapa vendedores",
-    shortLabel: "Mapa Vendedores",
-    icon: Map,
-  },
-  {
     href: "/admin/analytics",
     label: "Analiticas",
     shortLabel: "Analitica",
@@ -108,6 +101,7 @@ export const NAV_ITEMS: NavigationItem[] = [
 export const PAGE_TITLES: Record<string, string> = {
   "/admin/dashboard": "Dashboard",
   "/admin/products": "Productos",
+  "/admin/categories": "Categorías",
   "/admin/inventory-movements": "Movimientos de inventario",
   "/admin/clients": "Clientes",
   "/admin/suppliers": "Proveedores",
@@ -117,7 +111,5 @@ export const PAGE_TITLES: Record<string, string> = {
   "/admin/sales": "Ventas",
   "/admin/orders": "Pedidos",
   "/admin/sales-reps": "Vendedores",
-  "/admin/client-map": "Mapa clientes",
-  "/admin/sales-rep-map": "Mapa vendedores",
   "/admin/analytics": "Analiticas",
 };

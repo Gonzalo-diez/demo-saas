@@ -1,12 +1,13 @@
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import String, Integer, Numeric, Boolean, DateTime, func, CheckConstraint, UniqueConstraint
+from sqlalchemy import String, Integer, Numeric, Boolean, DateTime, ForeignKey, func, CheckConstraint, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 from typing import TYPE_CHECKING
 from app.models.mixin_model import TenantMixin
 
 if TYPE_CHECKING:
+    from app.models.category_model import Category
     from app.models.inventory_movement_model import InventoryMovement
     from app.models.purchase_invoice_item_model import PurchaseInvoiceItem
     from app.models.purchase_quote_item_model import PurchaseQuoteItem
@@ -47,15 +48,26 @@ class Product(Base, TenantMixin):
     brand_normalized: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(100), nullable=True, index=True)
     category_normalized: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    # Fuente de verdad de la categoría. `category`/`category_normalized` quedan como
+    # copia del nombre (los usan búsquedas, analytics y exports); se mantienen
+    # sincronizadas desde ProductRepository / CategoryService.
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     slug: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
+    # % de remarque sobre el costo con el que se calculó el precio de venta (si se usó).
+    markup_percent: Mapped[Decimal | None] = mapped_column(Numeric(7, 2), nullable=True)
     currency: Mapped[str] = mapped_column(String(10), default="ARS")
     stock_current: Mapped[int] = mapped_column(Integer, default=0)
     stock_min: Mapped[int] = mapped_column(Integer, default=0)
     sku: Mapped[str | None] = mapped_column(String(100), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Publicado en el catálogo que ven los clientes. Para verse tiene que estar
+    # activo, ser público y su categoría (si tiene) también pública.
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="DRAFT")
     
     created_at: Mapped[datetime] = mapped_column(
@@ -65,6 +77,8 @@ class Product(Base, TenantMixin):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     
+    category_rel: Mapped["Category | None"] = relationship("Category", lazy="select")
+
     inventory_movements: Mapped[list["InventoryMovement"]] = relationship(
         "InventoryMovement",
         back_populates="product",

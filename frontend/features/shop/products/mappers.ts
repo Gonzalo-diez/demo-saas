@@ -1,6 +1,5 @@
 import type { ShopProduct } from "@/features/shop/products/types"
 import type { Product } from "@/types/products"
-import { resolveCategory } from "@/lib/utils/category-normalizer"
 
 function safeSlug(value: string | null | undefined): string {
   if (!value) return ""
@@ -15,17 +14,16 @@ function safeSlug(value: string | null | undefined): string {
 }
 
 export function mapApiProductToProduct(shopProduct: ShopProduct): Product {
-  const resolvedCategory = resolveCategory(shopProduct.category)
-
   return {
     id: shopProduct.id,
     name: shopProduct.name,
     slug: shopProduct.slug,
     description: shopProduct.description ?? "",
-    brand: shopProduct.brand,
+    brand: shopProduct.brand ?? "",
 
-    category: resolvedCategory?.name ?? shopProduct.category,
-    categorySlug: resolvedCategory?.slug ?? safeSlug(shopProduct.category),
+    category: shopProduct.category ?? "",
+    categorySlug: safeSlug(shopProduct.category),
+    categoryId: shopProduct.category_id ?? null,
 
     unit_price: Number(shopProduct.unit_price),
     currency: shopProduct.currency,
@@ -34,9 +32,10 @@ export function mapApiProductToProduct(shopProduct: ShopProduct): Product {
     sku: shopProduct.sku ?? null,
 
     image_url: shopProduct.image_url ?? "/placeholder-product.png",
-    isActive: shopProduct.is_active,
+    // Todo lo que llega a la tienda está publicado y activo.
+    isActive: shopProduct.is_active ?? true,
 
-    createdAt: shopProduct.created_at,
-    updatedAt: shopProduct.updated_at,
+    createdAt: shopProduct.created_at ?? "",
+    updatedAt: shopProduct.updated_at ?? "",
   }
 }

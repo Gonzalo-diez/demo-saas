@@ -210,51 +210,6 @@ class ClientRepository:
         self.db.flush()
         return self.get_by_id(client.id)
 
-    def get_clients_for_map(
-        self,
-        search: str | None = None,
-        sales_rep_id: int | None = None,
-        is_active: bool | None = None,
-    ) -> list[ClientBranch]:
-        stmt = (
-            select(ClientBranch)
-            .join(Client, Client.id == ClientBranch.client_id)
-            .options(
-                joinedload(ClientBranch.client).joinedload(Client.sales_rep),
-            )
-            .where(
-                ClientBranch.lat.is_not(None),
-                ClientBranch.lng.is_not(None),
-                ClientBranch.is_active.is_(True),
-            )
-        )
-
-        if search:
-            search_term = f"%{search.strip()}%"
-            stmt = stmt.where(
-                or_(
-                    Client.name.ilike(search_term),
-                    Client.client_type.ilike(search_term),
-                    ClientBranch.name.ilike(search_term),
-                    ClientBranch.address.ilike(search_term),
-                    ClientBranch.city.ilike(search_term),
-                )
-            )
-
-        if sales_rep_id is not None:
-            stmt = stmt.where(Client.sales_rep_id == sales_rep_id)
-
-        if is_active is not None:
-            stmt = stmt.where(Client.is_active == is_active)
-
-        stmt = stmt.order_by(
-            ClientBranch.client_id.asc(),
-            ClientBranch.is_main.desc(),
-            ClientBranch.name.asc(),
-        )
-
-        return list(self.db.scalars(stmt).unique().all())
-
     def get_branch_by_id(self, branch_id: int) -> ClientBranch | None:
         stmt = select(ClientBranch).where(ClientBranch.id == branch_id)
         return self.db.scalar(stmt)

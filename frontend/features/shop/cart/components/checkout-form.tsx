@@ -16,6 +16,7 @@ import {
 import { useCreateOrderShop } from "@/features/shop/cart/hooks/use-create-order-shop";
 import { useCheckoutStorage } from "@/features/shop/cart/hooks/use-checkout-storage";
 import { useClientBranches } from "@/features/shop/cart/hooks/use-client-branches";
+import { useShopCategories } from "@/features/shop/categories/hooks/use-shop-categories";
 
 function toInputDate(d: Date) {
   return d.toISOString().split("T")[0];
@@ -39,6 +40,20 @@ export function CheckoutForm() {
   const { mutate: createOrder, isPending } = useCreateOrderShop();
   const { savedData, saveData, clearData } = useCheckoutStorage();
   const { data: branches } = useClientBranches();
+  const { data: categoriesData } = useShopCategories();
+
+  // Si algún producto del carrito es de una categoría con verificación de edad,
+  // el pedido exige DNI y confirmar mayoría de edad (el backend lo valida igual).
+  const hasRegulatedItems = useMemo(() => {
+    const regulatedIds = new Set(
+      (categoriesData?.items ?? [])
+        .filter((category) => category.requires_age_verification)
+        .map((category) => category.id),
+    );
+    return items.some(
+      (item) => item.category_id != null && regulatedIds.has(item.category_id),
+    );
+  }, [categoriesData, items]);
 
   const total = items.reduce(
     (acc, item) => acc + item.unit_price * item.quantity,
@@ -55,7 +70,7 @@ export function CheckoutForm() {
     getValues,
     formState: { errors },
   } = useForm<CreateOrderShopFormValues>({
-    resolver: zodResolver(createOrderShopSchema(false)),
+    resolver: zodResolver(createOrderShopSchema(hasRegulatedItems)),
     defaultValues: {
       delivery_type: "delivery",
     },
@@ -544,7 +559,8 @@ export function CheckoutForm() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4">
+      {hasRegulatedItems && (
+      <div className="rounded-xl border border-kraft/60 bg-kraft/10 p-4">
         <div className="space-y-3">
           <div>
             <h3 className="text-sm font-semibold">Verificación de edad</h3>
@@ -578,6 +594,7 @@ export function CheckoutForm() {
           )}
         </div>
       </div>
+      )}
 
       <button
         type="submit"

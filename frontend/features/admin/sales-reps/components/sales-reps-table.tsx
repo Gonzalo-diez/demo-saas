@@ -48,7 +48,6 @@ export function SalesRepsTable({ salesReps }: SalesRepsTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Teléfono</TableHead>
@@ -79,9 +78,6 @@ export function SalesRepsTable({ salesReps }: SalesRepsTableProps) {
 
                   return (
                     <TableRow key={salesRep.id}>
-                      <TableCell className="font-medium">
-                        {salesRep.id}
-                      </TableCell>
                       <TableCell className="font-medium">
                         {salesRep.name}
                       </TableCell>

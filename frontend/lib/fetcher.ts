@@ -1,6 +1,41 @@
-import { API_URL } from "@/lib/api";
+import { getApiUrl } from "@/lib/api";
+import {
+  getCurrentHost,
+  getStoredTenantSlug,
+  isBareLocalHost,
+} from "@/lib/tenant-storage";
+import { useTenantStore } from "@/features/tenant/store/tenant-store";
 
 type FetchOptions = RequestInit;
+
+/**
+ * Headers que identifican la distribuidora. El backend los usa solo en endpoints
+ * sin sesión (catálogo público, login, registro, tracking); con sesión manda el
+ * tenant del token.
+ *
+ * - X-Tenant-Domain: el host con el que se abrió la tienda (tienda.distri-oeste.com).
+ *   Es lo que identifica a la distribuidora de un visitante.
+ * - X-Tenant-Slug: el código elegido a mano. Solo se manda si el dominio NO
+ *   identifica a ninguna distribuidora (localhost o dominio de la plataforma),
+ *   porque en el backend el código tiene prioridad sobre el dominio.
+ */
+export function tenantHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  const host = getCurrentHost();
+  if (host) headers["X-Tenant-Domain"] = host;
+
+  // El código elegido a mano solo cuenta en localhost o cuando ya se comprobó que el
+  // dominio no es de ninguna distribuidora. Antes de eso NO se manda: un código viejo
+  // guardado en el navegador pisaría al dominio (el backend prioriza el código).
+  const { hostTenant, hostChecked } = useTenantStore.getState();
+  if (!hostTenant && (hostChecked || isBareLocalHost(host))) {
+    const slug = getStoredTenantSlug();
+    if (slug) headers["X-Tenant-Slug"] = slug;
+  }
+
+  return headers;
+}
 
 export async function apiFetch<T>(
   endpoint: string,
@@ -8,11 +43,12 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const isFormData = options.body instanceof FormData;
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  const response = await fetch(`${getApiUrl()}${endpoint}`, {
     ...options,
     credentials: "include",
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...tenantHeaders(),
       ...(options.headers ?? {}),
     },
   });
@@ -43,10 +79,11 @@ export async function apiFetchBlob(
   endpoint: string,
   options: FetchOptions = {}
 ): Promise<Blob> {
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  const response = await fetch(`${getApiUrl()}${endpoint}`, {
     ...options,
     credentials: "include",
     headers: {
+      ...tenantHeaders(),
       ...(options.headers ?? {}),
     },
   });

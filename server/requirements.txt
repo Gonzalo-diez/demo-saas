@@ -38,9 +38,6 @@ slowapi==0.1.9
 # --- Reportlab ---
 reportlab==4.4.10
 
-# --- Gemini ---
-google-genai==1.73.1
-
 # --- PDF ---
 pdfplumber==0.11.9
 pyzbar==0.1.9

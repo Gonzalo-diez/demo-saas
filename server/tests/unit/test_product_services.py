@@ -4,6 +4,7 @@ No requiere BD real.
 """
 import pytest
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
@@ -16,6 +17,7 @@ class TestProductServiceHelpers:
         from app.services.product_service import ProductService
         db = MagicMock()
         with patch("app.services.product_service.ProductRepository"), \
+             patch("app.services.product_service.CategoryRepository"), \
              patch("app.services.product_service.InventoryMovementRepository"), \
              patch("app.services.product_service.InventoryMovementService"):
             svc = ProductService(db)
@@ -97,37 +99,42 @@ class TestProductServiceHelpers:
 
     # ── categorías libres/no-catálogo (venta B2B, no exigen imagen) ───────
 
-    def test_complete_without_image_when_category_is_free(self):
+    def test_complete_without_image_when_category_is_private(self):
         svc = self._make_service()
         data = {
             "name": "Repuesto interno",
             "brand": "Marca",
-            "category": "Repuestos Vending",  # no está en la whitelist
+            "category": "Repuestos Vending",
             "image_url": None,
         }
-        assert svc._is_product_complete(data) is True
+        assert svc._is_product_complete(data, SimpleNamespace(is_public=False)) is True
 
-    def test_still_needs_image_when_category_is_catalog(self):
+    def test_complete_without_image_when_product_is_not_public(self):
+        svc = self._make_service()
+        data = {"name": "X", "brand": "Marca", "category": "Pilas", "image_url": None, "is_public": False}
+        assert svc._is_product_complete(data, SimpleNamespace(is_public=True)) is True
+
+    def test_still_needs_image_when_category_is_public(self):
         svc = self._make_service()
         data = {
             "name": "Producto catálogo",
             "brand": "Marca",
-            "category": "pilas",  # sí está en la whitelist
+            "category": "pilas",
             "image_url": None,
         }
-        assert svc._is_product_complete(data) is False
+        assert svc._is_product_complete(data, SimpleNamespace(is_public=True)) is False
 
-    def test_import_active_without_image_when_category_is_free(self):
+    def test_import_active_without_image_when_category_is_private(self):
         svc = self._make_service()
         data = {"image_url": None, "category": "Repuestos Vending"}
-        is_active, status = svc._determine_product_state_import(data)
+        is_active, status = svc._determine_product_state_import(data, SimpleNamespace(is_public=False))
         assert is_active is True
         assert status == "ACTIVE"
 
-    def test_import_still_needs_image_when_category_is_catalog(self):
+    def test_import_still_needs_image_when_category_is_public(self):
         svc = self._make_service()
         data = {"image_url": None, "category": "pilas"}
-        is_active, status = svc._determine_product_state_import(data)
+        is_active, status = svc._determine_product_state_import(data, SimpleNamespace(is_public=True))
         assert is_active is False
         assert status == "DRAFT"
 

@@ -11,11 +11,14 @@ from app.core.security import get_password_hash, create_access_token
 # ═══════════════════════════════════════════════════════════════════════════
 
 @pytest.fixture()
-def product_payload():
+def product_payload(client, auth_headers):
+    # Categoría pública propia de la distribuidora (ya no hay lista fija en el código).
+    resp = client.post("/api/categories/", json={"name": "Pilas", "is_public": True, "image_url": "https://example.com/pilas.jpg"}, headers=auth_headers)
+    assert resp.status_code == 201, resp.text
     return {
         "name": "Producto Test",
         "brand": "Marca Test",
-        "category": "pilas",
+        "category_id": resp.json()["id"],
         "unit_cost": "100.00",
         "unit_price": "150.00",
         "sku": "SKU-TEST-001",
@@ -81,9 +84,10 @@ class TestAuth:
 class TestProductsEndpoints:
 
     def test_list_products_no_auth(self, client):
-        """El catálogo ahora requiere login (cliente o staff)."""
+        """La tienda es pública: un visitante sin login ve el catálogo (solo lo publicado)."""
         resp = client.get("/api/products/")
-        assert resp.status_code == 401
+        assert resp.status_code == 200
+        assert resp.json()["items"] == []
 
     def test_list_products_returns_pagination(self, client, auth_headers):
         resp = client.get("/api/products/", headers=auth_headers)

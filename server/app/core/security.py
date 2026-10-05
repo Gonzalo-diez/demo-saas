@@ -3,6 +3,8 @@ from jose import jwt
 from passlib.context import CryptContext
 from app.core.config import get_settings
 
+PLATFORM_ADMIN_TOKEN_TYPE = "platform_admin"
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 settings = get_settings()
 
@@ -17,18 +19,21 @@ def create_access_token(
     token_type: str = "staff",
     tenant_id: int | None = None,
 ) -> str:
+    """
+    token_type distingue quién es el dueño del token: "staff" (SalesRep,
+    el panel interno) o "client" (comercio B2B logueado en el catálogo).
+    Es fundamental para que un id numérico de un lado no se confunda con
+    el id de una tabla distinta del otro lado.
 
-    if token_type != "platform_admin" and tenant_id is None:
-        raise ValueError(
-            "Los tokens de tenant requieren tenant_id"
-        )
+    tenant_id es OBLIGATORIO para "staff" y "client": el tenant de cada request
+    se toma de este claim firmado (nunca de un header que pueda mandar el
+    cliente), así un usuario de la distribuidora A no puede operar sobre la B.
 
-    expire = (
-        datetime.now(timezone.utc)
-        + timedelta(
-            minutes=settings.JWT_EXPIRES_MIN
-        )
-    )
+    "platform_admin" (administrador de la plataforma) NO pertenece a ningún
+    tenant: su token no lleva tenant_id, y por eso no sirve en ninguna ruta
+    de distribuidora (esas exigen el claim).
+    """
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRES_MIN)
 
     payload = {
         "sub": subject,
@@ -36,11 +41,12 @@ def create_access_token(
         "exp": expire,
     }
 
-    if tenant_id is not None:
+    if token_type == PLATFORM_ADMIN_TOKEN_TYPE:
+        if tenant_id is not None:
+            raise ValueError("Un token platform_admin no puede llevar tenant_id")
+    else:
+        if tenant_id is None:
+            raise ValueError("create_access_token requiere tenant_id")
         payload["tenant_id"] = int(tenant_id)
 
-    return jwt.encode(
-        payload,
-        settings.JWT_SECRET,
-        algorithm=settings.JWT_ALG,
-    )
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALG)

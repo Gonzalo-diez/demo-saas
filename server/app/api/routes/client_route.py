@@ -28,7 +28,7 @@ from app.schemas.client_schema import (
     ClientCreate,
     ClientListResponse,
     ClientLogin,
-    ClientMapResponse,
+    ClientRegister,
     ClientResponse,
     ClientUpdate,
     MessageResponse,
@@ -58,6 +58,33 @@ def login_client(
     bind_tenant_from_ref(db, tenant_ref, data.tenant_slug)
     service = ClientService(db)
     client, access_token = service.login(data)
+    set_auth_cookie(
+        response,
+        access_token,
+        cookie_name=settings.CLIENT_AUTH_COOKIE_NAME,
+    )
+    return client
+
+@router.post("/register", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
+def register_client(
+    request: Request,
+    data: ClientRegister,
+    response: Response,
+    db: Session = Depends(get_db_with_commit),
+    tenant_ref: TenantRef = Depends(get_tenant_ref),
+):
+    """
+    Registro de un cliente desde la tienda pública de una distribuidora.
+
+    Se llama recién cuando el visitante quiere FINALIZAR una compra: crea la cuenta y deja
+    la sesión iniciada (cookie), así puede confirmar el pedido (POST /api/orders) sin
+    volver a loguearse. La distribuidora sale del dominio de la tienda
+    (header X-Tenant-Domain) o del slug (X-Tenant-Slug / tenant_slug).
+    """
+    bind_tenant_from_ref(db, tenant_ref, data.tenant_slug)
+    service = ClientService(db)
+    client, access_token = service.register(data)
     set_auth_cookie(
         response,
         access_token,
@@ -108,23 +135,6 @@ def list_clients(
         sales_rep_id=sales_rep_id,
         is_active=is_active,
         sort=sort,
-    )
-
-@router.get("/map", response_model=ClientMapResponse)
-@limiter.limit("30/minute")
-def get_clients_for_map(
-    request: Request,
-    search: str | None = Query(default=None),
-    sales_rep_id: int | None = Query(default=None),
-    is_active: bool | None = Query(default=None),
-    db: Session = Depends(get_db),
-    _: SalesRep = Depends(get_current_active_user),
-):
-    service = ClientService(db)
-    return service.get_clients_for_map(
-        search=search,
-        sales_rep_id=sales_rep_id,
-        is_active=is_active,
     )
 
 @router.get(

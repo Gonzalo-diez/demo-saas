@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,8 +16,10 @@ import { useCreateProduct } from "@/features/admin/products/hooks/use-create-pro
 import { useUpdateProduct } from "@/features/admin/products/hooks/use-update-product";
 import { useUploadProductImage } from "@/features/admin/products/hooks/use-upload-product-image";
 import type { Product } from "@/features/admin/products/types";
+import { PriceMarkupFields } from "@/features/admin/products/components/price-markup-fields";
+import { cn } from "@/lib/utils";
 import { ProductCategorySelect } from "@/features/admin/products/components/product-category-select";
-import { isUnclassifiedCategory } from "@/features/admin/products/utils/category-utils";
+import { useCategories } from "@/features/admin/categories/hooks/use-categories";
 
 const INVALID_BRANDS = new Set(["pendiente", "sin marca"]);
 
@@ -58,10 +60,14 @@ export function CreateProductForm({
       name: "",
       description: null,
       brand: null,
-      category: null,
+      category_id: null,
+      is_public: true,
       image_url: null,
       unit_cost: 0,
+      pricing_mode: "markup",
+      markup_percent: 0,
       unit_price: 0,
+      expiry_date: null,
       stock_current: 0,
       stock_min: 0,
     },
@@ -69,8 +75,24 @@ export function CreateProductForm({
 
   const unitCost = Number(watch("unit_cost") ?? 0);
   const unitPrice = Number(watch("unit_price") ?? 0);
+  const initialStockValue = Number(watch("stock_current") ?? 0);
+
+  // Remarque y precio son dos campos ligados (ver PriceMarkupFields). `pricingEmpty`: todavía
+  // no se cargó ninguno de los dos; el `key` los reinicia al cambiar de producto o tras guardar.
+  const [pricingEmpty, setPricingEmpty] = useState(mode === "create");
+  const [pricingError, setPricingError] = useState<string | null>(null);
+  const [formVersion, setFormVersion] = useState(0);
   const imageUrl = watch("image_url");
+  const categoryId = watch("category_id");
+  const isPublicProduct = watch("is_public");
+
+  // Un producto visible en el catálogo (producto público + categoría pública) exige imagen.
+  const { data: categoriesData } = useCategories();
+  const selectedCategory = categoriesData?.items.find((c) => c.id === categoryId);
+  const willShowInCatalog = !!isPublicProduct && !!selectedCategory?.is_public;
   const unitMargin = useMemo(() => unitPrice - unitCost, [unitPrice, unitCost]);
+  const marginPercent = unitCost > 0 ? (unitMargin / unitCost) * 100 : null;
+  const today = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
     if (mode === "edit" && initialData) {
@@ -79,13 +101,22 @@ export function CreateProductForm({
         name: initialData.name,
         description: initialData.description ?? "",
         brand: initialData.brand ?? "",
-        category: initialData.category ?? "",
+        category_id: initialData.category_id ?? null,
+        is_public: initialData.is_public ?? true,
         image_url: initialData.image_url ?? "",
         unit_cost: Number(initialData.unit_cost),
+        // En edición se parte del precio real: el costo es el promedio ponderado y puede no
+        // coincidir con el de la compra con la que se fijó el precio.
+        pricing_mode: "price",
+        markup_percent: Number(initialData.markup_percent ?? 0),
         unit_price: Number(initialData.unit_price),
+        expiry_date: null,
         stock_current: initialData.stock_current,
         stock_min: initialData.stock_min,
       });
+      setPricingEmpty(false);
+      setPricingError(null);
+      setFormVersion((v) => v + 1);
       return;
     }
 
@@ -94,10 +125,14 @@ export function CreateProductForm({
       name: "",
       description: null,
       brand: null,
-      category: null,
+      category_id: null,
+      is_public: true,
       image_url: null,
       unit_cost: 0,
+      pricing_mode: "markup",
+      markup_percent: 0,
       unit_price: 0,
+      expiry_date: null,
       stock_current: 0,
       stock_min: 0,
     });
@@ -121,8 +156,6 @@ export function CreateProductForm({
 
   const onSubmit = async (data: CreateProductFormValues) => {
     const brand = data.brand?.trim() || null;
-    const category = data.category?.trim() || null;
-
     // El backend rechaza crear productos sin marca o sin categoría (quedarían
     // incompletos), así que lo avisamos acá en vez de devolver un 400 genérico.
     // En edición se permite guardar un producto que sigue "Sin clasificar".
@@ -134,9 +167,17 @@ export function CreateProductForm({
         hasError = true;
       }
 
-      if (!category || isUnclassifiedCategory(category)) {
-        setError("category", {
-          message: "Elegí una categoría o creá una nueva",
+      if (!data.category_id) {
+        setError("category_id", {
+          message: "Elegí una categoría (si no tenés, creala en Categorías)",
+        });
+        hasError = true;
+      }
+
+      if (willShowInCatalog && !data.image_url?.trim()) {
+        setError("image_url", {
+          message:
+            "Para mostrarlo en el catálogo necesitás una imagen. Subila o desmarcá \"Visible en el catálogo\".",
         });
         hasError = true;
       }
@@ -144,15 +185,33 @@ export function CreateProductForm({
       if (hasError) return;
     }
 
+    if (mode === "create" && pricingEmpty) {
+      setPricingError("Ingresá el remarque o el precio de venta.");
+      return;
+    }
+
+    const {
+      pricing_mode: pricingModeValue,
+      markup_percent: markupValue,
+      unit_price: priceValue,
+      expiry_date: expiryValue,
+      ...rest
+    } = data;
+
     const payload = {
-      ...data,
+      ...rest,
       description: data.description?.trim() || null,
       brand,
       // En edición, sin categoría elegida no la tocamos (evita mandar null).
-      category: mode === "edit" ? (category ?? undefined) : category,
+      category_id: mode === "edit" ? (data.category_id ?? undefined) : data.category_id,
       image_url: data.image_url?.trim() || null,
       unit_cost: Number(data.unit_cost),
-      unit_price: Number(data.unit_price),
+      // Con remarque se manda el % y el backend calcula y redondea el precio; si no, el precio.
+      ...(pricingModeValue === "markup"
+        ? { markup_percent: Number(markupValue) }
+        : { unit_price: Number(priceValue) }),
+      // El vencimiento es del stock inicial: solo al crear (después, Historial de compras).
+      ...(mode === "create" && expiryValue ? { expiry_date: expiryValue } : {}),
       stock_current: Number(data.stock_current),
       stock_min: Number(data.stock_min),
     };
@@ -185,13 +244,19 @@ export function CreateProductForm({
         name: "",
         description: null,
         brand: null,
-        category: null,
+        category_id: null,
+        is_public: true,
         image_url: null,
         unit_cost: 0,
+        pricing_mode: "markup",
+        markup_percent: 0,
         unit_price: 0,
+        expiry_date: null,
         stock_current: 0,
         stock_min: 0,
       });
+      setPricingEmpty(true);
+      setFormVersion((v) => v + 1);
 
       onSuccess?.();
     } catch (error) {
@@ -273,20 +338,39 @@ export function CreateProductForm({
               Categoría{mode === "create" ? " *" : ""}
             </label>
             <ProductCategorySelect
-              value={watch("category")}
+              value={watch("category_id")}
               onChange={(value) =>
-                setValue("category", value, {
+                setValue("category_id", value, {
                   shouldValidate: true,
                   shouldDirty: true,
                 })
               }
             />
-            {errors.category && (
+            {errors.category_id && (
               <p className="text-sm text-destructive">
-                {errors.category.message}
+                {errors.category_id.message}
               </p>
             )}
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3 md:col-span-2">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 accent-[var(--brand)]"
+              {...register("is_public")}
+            />
+            <span className="text-sm">
+              <span className="font-semibold">Visible en el catálogo</span>
+              <span className="block text-muted-foreground">
+                Si lo desmarcás, el producto queda solo para venta B2B interna.
+                {willShowInCatalog
+                  ? " Para publicarlo necesita una imagen."
+                  : selectedCategory && !selectedCategory.is_public
+                    ? " Además, su categoría es privada, así que no se mostrará."
+                    : ""}
+              </span>
+            </span>
+          </label>
         </div>
       </section>
 
@@ -298,7 +382,7 @@ export function CreateProductForm({
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className={cn("grid gap-4 sm:grid-cols-2", mode === "create" ? "xl:grid-cols-4" : "xl:grid-cols-3")}>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Costo unitario</label>
             <Input
@@ -310,21 +394,6 @@ export function CreateProductForm({
             {errors.unit_cost && (
               <p className="text-sm text-destructive">
                 {errors.unit_cost.message}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Precio de venta</label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              {...register("unit_price")}
-            />
-            {errors.unit_price && (
-              <p className="text-sm text-destructive">
-                {errors.unit_price.message}
               </p>
             )}
           </div>
@@ -348,6 +417,55 @@ export function CreateProductForm({
               </p>
             )}
           </div>
+
+          {mode === "create" && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Vencimiento (opcional)</label>
+              <Input
+                type="date"
+                min={today}
+                disabled={!(initialStockValue > 0)}
+                {...register("expiry_date")}
+              />
+              <p className="text-xs text-muted-foreground">
+                Vence el stock inicial. Las compras siguientes llevan su propio vencimiento.
+              </p>
+              {errors.expiry_date && (
+                <p className="text-sm text-destructive">
+                  {errors.expiry_date.message}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3 rounded-xl border p-4">
+          <p className="text-sm font-medium">Precio de venta</p>
+
+          <PriceMarkupFields
+            key={`${mode}-${initialData?.id ?? "new"}-${formVersion}`}
+            idPrefix="product-pricing"
+            unitCost={unitCost}
+            initialSource={mode === "edit" ? "price" : "markup"}
+            initialPrice={mode === "edit" && initialData ? Number(initialData.unit_price) : null}
+            onChange={(value) => {
+              setValue("pricing_mode", value.source === "price" ? "price" : "markup", {
+                shouldDirty: true,
+              });
+              setValue("markup_percent", value.markup ?? 0, { shouldDirty: true });
+              setValue("unit_price", value.price ?? 0, { shouldDirty: true });
+              setPricingEmpty(value.markup == null && value.price == null);
+              setPricingError(null);
+            }}
+          />
+
+          {pricingError && <p className="text-sm text-destructive">{pricingError}</p>}
+          {errors.markup_percent && (
+            <p className="text-sm text-destructive">{errors.markup_percent.message}</p>
+          )}
+          {errors.unit_price && (
+            <p className="text-sm text-destructive">{errors.unit_price.message}</p>
+          )}
         </div>
 
         <div className="rounded-xl border bg-muted/30 p-4">
@@ -363,7 +481,10 @@ export function CreateProductForm({
             </div>
             <div>
               <span className="text-muted-foreground">Margen unitario:</span>{" "}
-              <span className="font-medium">{formatCurrency(unitMargin)}</span>
+              <span className="font-medium">
+                {formatCurrency(unitMargin)}
+                {marginPercent !== null && ` (${marginPercent.toFixed(1)}%)`}
+              </span>
             </div>
           </div>
         </div>
@@ -421,11 +542,11 @@ export function CreateProductForm({
 
         {/* Preview de la Imagen */}
         {Boolean(imageUrl) ? (
-          <div className="overflow-hidden rounded-2xl border bg-muted relative group">
+          <div className="relative group overflow-hidden rounded-2xl border bg-card p-3">
             <img
               src={imageUrl || ""}
               alt="Preview del producto"
-              className="h-64 w-full object-cover"
+              className="h-64 w-full object-contain p-2 mix-blend-multiply"
               onError={(e) => {
                 // Previene que se rompa la UI si la URL ingresada es inválida
                 (e.target as HTMLImageElement).src =

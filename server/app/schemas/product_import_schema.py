@@ -1,7 +1,6 @@
 from decimal import Decimal
 from typing import Any, List, Literal
 from pydantic import BaseModel, ConfigDict, Field, AnyHttpUrl, field_validator
-from app.utils.category_normalizer import resolve_category_value
 
 class ProductImportRow(BaseModel):
     sku: str = Field(..., min_length=1, max_length=100)
@@ -27,8 +26,10 @@ class ProductImportRow(BaseModel):
 
     @field_validator("category", mode="before")
     @classmethod
-    def normalize_category_field(cls, v: Any) -> str:
-        return resolve_category_value(str(v)) if v else v
+    def clean_category_field(cls, v: Any) -> Any:
+        # El nombre se resuelve contra las categorías de la distribuidora al
+        # importar (se reutiliza la existente o se crea una privada).
+        return " ".join(str(v).strip().split()) if v else v
 
     @field_validator("image_url", mode="before")
     @classmethod

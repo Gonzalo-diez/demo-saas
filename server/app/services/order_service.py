@@ -21,7 +21,6 @@ from app.schemas.order_schema import (
     OrderEditB2B,
 )
 from app.utils.normalize_text import normalize_text
-from app.utils.category_normalizer import is_regulated_category
 from app.models.order_item_model import OrderItem
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
@@ -146,7 +145,20 @@ class OrderService:
             "city": getattr(branch, "city", None),
         }
 
-    def _calculate_totals(self, items_in: list):
+    def _calculate_totals(
+        self,
+        items_in: list,
+        *,
+        shop: bool = False,
+        existing_product_ids: frozenset[int] = frozenset(),
+    ):
+        """
+        shop=True: pedido hecho por un cliente (tienda online / link de edición). Solo
+        puede pedir lo que el catálogo le muestra (producto público de categoría
+        pública). Los productos que ya estaban en el pedido (existing_product_ids)
+        se respetan aunque después se hayan despublicado. Los pedidos B2B armados
+        por el personal pueden incluir cualquier producto activo.
+        """
         product_ids = [i.product_id for i in items_in]
         
         if len(product_ids) != len(set(product_ids)):
@@ -170,7 +182,14 @@ class OrderService:
             if not product.is_active:
                 raise ValueError(f"Producto {product.name} inactivo")
 
-            if is_regulated_category(product.category):
+            category = product.category_rel
+
+            if shop and product.id not in existing_product_ids:
+                if not product.is_public or (category is not None and not category.is_public):
+                    # Mismo mensaje que un producto inexistente: no revela lo que no es público.
+                    raise ValueError(f"Producto {product.id} no existe")
+
+            if category is not None and category.requires_age_verification:
                 has_regulated_items = True
 
             unit_price = product.unit_price or Decimal("0")
@@ -253,7 +272,7 @@ class OrderService:
                 )
 
     def create_order_shop(self, *, obj_in: OrderCreateShop, current_client: Client) -> Order:
-        total_data = self._calculate_totals(obj_in.items)
+        total_data = self._calculate_totals(obj_in.items, shop=True)
 
         # Verificación de edad para productos regulados (tabaco),
         # según Ley 26.687. El checkbox y el DNI son declarados por
@@ -615,7 +634,11 @@ class OrderService:
 
         old_items = list(order.items)
 
-        total_data = None if keep_items else self._calculate_totals(obj_in.items)
+        total_data = None if keep_items else self._calculate_totals(
+            obj_in.items,
+            shop=True,
+            existing_product_ids=frozenset(i.product_id for i in old_items),
+        )
 
         stock_affecting_statuses = {
             "confirmed",

@@ -1,32 +1,31 @@
 import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner"
 import { QueryProvider } from "@/providers/query-provider";
-import { Geist, Geist_Mono, JetBrains_Mono, Archivo } from "next/font/google";
+import { Instrument_Sans, JetBrains_Mono, Bricolage_Grotesque } from "next/font/google";
+import { TenantHydrator } from "@/features/tenant/components/tenant-hydrator";
+import { PLATFORM_NAME } from "@/constants/brand";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Texto de uso diario
+const instrumentSans = Instrument_Sans({
+  variable: "--font-ui",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Títulos y números destacados
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-display",
   subsets: ["latin"],
-});
-
-const archivo = Archivo({
-  variable: "--font-archivo",
-  subsets: ["latin"],
-  weight: ["500", "700", "900"],
+  weight: ["500", "700", "800"],
 });
 
 export const metadata: Metadata = {
-  title: "Distri Choco - Distribuidora mayorista",
+  title: `${PLATFORM_NAME} - Catálogo mayorista`,
   description:
-    "Catálogo mayorista de Distri Choco: cigarrillos, tabaco, farmacia y accesorios. Pedidos rápidos, entrega directa en Mercedes y alrededores.",
+    "Catálogo mayorista online para distribuidoras: pedidos rápidos, clientes B2B y gestión de ventas, stock y reparto.",
 };
 
 export default function RootLayout({
@@ -40,15 +39,15 @@ export default function RootLayout({
       className={cn(
         "h-full",
         "antialiased",
-        geistSans.variable,
-        geistMono.variable,
+        instrumentSans.variable,
         jetbrainsMono.variable,
-        archivo.variable,
+        bricolage.variable,
       )}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
         <QueryProvider>
+          <TenantHydrator />
           {children}
           <Toaster richColors position="top-right" />
         </QueryProvider>

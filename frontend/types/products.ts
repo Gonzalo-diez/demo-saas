@@ -6,6 +6,7 @@ export type Product = {
   brand: string
   category: string
   categorySlug: string
+  categoryId?: number | null
   unit_price: number
   currency: string
   stock_current: number

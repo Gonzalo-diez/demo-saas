@@ -25,6 +25,16 @@ class Tenant(Base):
         index=True,
     )
     
+    # Host con el que los clientes entran a la tienda de esta distribuidora
+    # (ej. "tienda.distri-norte.com"). Se guarda normalizado (sin esquema/puerto/path)
+    # y es único: de acá se resuelve a qué tenant pertenece cada visita.
+    domain: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
     logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)

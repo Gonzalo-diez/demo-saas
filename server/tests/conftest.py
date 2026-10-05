@@ -77,6 +77,7 @@ def create_tables():
     """Crea todas las tablas una sola vez por sesión de tests."""
     # Importar todos los modelos para que Base los conozca
     import app.models.sales_rep_model  # noqa
+    import app.models.category_model  # noqa
     import app.models.product_model  # noqa
     import app.models.client_model  # noqa
     import app.models.client_branch_model  # noqa
@@ -126,7 +127,7 @@ def db():
     # igual que lo hace un request autenticado. Todo lo que el test cree queda
     # estampado con ese tenant.
     with unscoped(session):
-        default_tenant = Tenant(name="Distribuidora Test", slug="test", is_active=True)
+        default_tenant = Tenant(name="Distribuidora Test", slug="test", domain="test.localhost", is_active=True)
         session.add(default_tenant)
         session.flush()
     set_tenant(session, default_tenant.id)
@@ -162,7 +163,8 @@ def client(db):
     # autenticados toman el tenant del token e ignoran este header).
     with TestClient(
         app,
-        raise_server_exceptions=False,
+        # TEST_RAISE=1 muestra el traceback real de un 500 al depurar.
+        raise_server_exceptions=os.environ.get("TEST_RAISE") == "1",
         headers={"X-Tenant-Slug": "test"},
     ) as c:
         yield c

@@ -23,7 +23,6 @@ from app.schemas.sales_rep_schema import (
     MessageResponse,
     SalesRepCreate,
     SalesRepListResponse,
-    SalesRepMapResponse,
     SalesRepLogin,
     SalesRepResponse,
     SalesRepUpdate,
@@ -55,28 +54,6 @@ def get_sales_reps(
         search=search,
         status_filter=status,
         sort=sort,
-    )
-
-@router.get("/map", response_model=SalesRepMapResponse)
-@limiter.limit("30/minute")
-def get_sales_reps_for_map(
-    request: Request,
-    lat: float | None = None,
-    lng: float | None = None,
-    radius_km: float | None = None,
-    search: str | None = None,
-    is_active: bool | None = None,
-    db: Session = Depends(get_db),
-    _: SalesRep = Depends(get_current_active_user),
-):
-    service = SalesRepService(db)
-
-    return service.get_sales_reps_for_map(
-        lat=lat,
-        lng=lng,
-        radius_km=radius_km,
-        search=search,
-        is_active=is_active,
     )
 
 @router.get("/me", response_model=SalesRepResponse)

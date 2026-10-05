@@ -1,5 +1,6 @@
 from decimal import Decimal
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Literal
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from datetime import datetime
 from app.schemas.client_branch_schema import (
     ClientBranchCreate, 
@@ -24,6 +25,40 @@ class ClientLogin(BaseModel):
             return v.strip().lower()
         return v
     
+
+class ClientRegister(BaseModel):
+    """
+    Alta de un cliente desde la tienda pública (autoregistro): se pide recién
+    cuando el visitante va a finalizar una compra.
+    """
+    name: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr
+    password: str = Field(..., min_length=6, max_length=255)
+    phone: str = Field(..., min_length=5, max_length=50)
+    tax_id: str | None = Field(default=None, min_length=1, max_length=50)
+    client_type: Literal["individual", "company"] = "individual"
+    # Distribuidora (alternativa a los headers X-Tenant-Domain / X-Tenant-Slug).
+    tenant_slug: str | None = Field(default=None, max_length=100)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, v):
+        if isinstance(v, str):
+            return " ".join(v.strip().split())
+        return v
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def lower_email(cls, v):
+        if isinstance(v, str):
+            return v.strip().lower()
+        return v
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def clean_phone(cls, v):
+        return normalize_phone(v)
+
 
 class ClientSalesRepSummary(BaseModel):
     id: int
@@ -97,31 +132,6 @@ class ClientResponse(ClientBase):
     branches: list[ClientBranchResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
-
-class ClientMapItem(BaseModel):
-    client_id: int
-    client_name: str
-    client_type: str
-    sales_rep_id: int | None = None
-    sales_rep_name: str | None = None
-
-    tax_id: str | None = None
-
-    branch_id: int
-    branch_name: str
-    branch_address: str | None = None
-    branch_city: str | None = None
-    branch_is_main: bool
-    h3_index: str | None = None
-
-    lat: float
-    lng: float
-    is_active: bool
-
-    model_config = ConfigDict(from_attributes=True)
-
-class ClientMapResponse(BaseModel):
-    clients: list[ClientMapItem] = Field(default_factory=list)
 
 class ClientListResponse(BaseModel):
     clients: list[ClientResponse] = Field(default_factory=list)

@@ -483,6 +483,16 @@ class PurchaseInvoiceService:
                     reference_id=invoice.id,
                 )
 
+                # Historial de compras del producto: costo y cantidad de este remito.
+                self.product_service.purchase_history.record(
+                    product_id=item.product_id,
+                    quantity=incoming_qty,
+                    unit_cost=incoming_cost,
+                    source="purchase_invoice",
+                    reference_id=invoice.id,
+                    created_by=getattr(current_user, "id", None),
+                )
+
             # =========================
             # 4. Cuenta corriente del proveedor
             # =========================

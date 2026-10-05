@@ -18,16 +18,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useClientAuthStore } from "@/features/shop/auth/store/auth-store";
 import { useClientLogout } from "@/features/shop/auth/hooks/use-auth";
-
-const CATEGORIES = [
-  { slug: "analgesicos-farmacia", label: "Analgésicos y farmacia" },
-  { slug: "cigarrillos-economicos", label: "Cigarrillos económicos" },
-  { slug: "cigarrillos-massalin-bat", label: "Cigarrillos Massalin y BAT" },
-  { slug: "tabaco-accesorios", label: "Tabaco y accesorios" },
-  { slug: "pegamentos", label: "Pegamentos" },
-  { slug: "pilas", label: "Pilas" },
-  { slug: "preservativos", label: "Preservativos" },
-];
+import { useClientSession } from "@/features/shop/auth/hooks/use-session";
+import { useShopCategories } from "@/features/shop/categories/hooks/use-shop-categories";
+import { TenantBrand } from "@/features/tenant/components/tenant-brand";
 
 export function Navbar() {
   const totalItems = useCartStore((state) => state.getTotalItems());
@@ -36,6 +29,14 @@ export function Navbar() {
 
   const client = useClientAuthStore((state) => state.client);
   const logout = useClientLogout();
+
+  // El catálogo es público: la sesión (si la hay) se consulta acá para que el
+  // menú muestre el nombre del cliente en cualquier página de la tienda.
+  useClientSession();
+
+  // Las categorías son de cada distribuidora (las que publicó en su catálogo).
+  const { data: categoriesData } = useShopCategories();
+  const categories = categoriesData?.items ?? [];
 
   const hasItems = mounted && totalItems > 0;
   const isAuthenticated = mounted && !!client;
@@ -48,25 +49,9 @@ export function Navbar() {
   const catalogoActive = pathname.startsWith("/catalogo");
   const ingresarActive = pathname.startsWith("/ingresar");
 
-  /**
-   * Cuando el usuario no está autenticado no mostramos el dropdown
-   * del catálogo.
-   *
-   * Si alguien llega directamente a /catalogo, RequireClientAuth
-   * seguirá protegiendo la ruta.
-   *
-   * Ajustamos el estado durante el render (en vez de en un efecto) para
-   * evitar un render en cascada: https://react.dev/learn/you-might-not-need-an-effect
-   */
-  const [prevIsAuthenticated, setPrevIsAuthenticated] = useState(isAuthenticated);
-  if (isAuthenticated !== prevIsAuthenticated) {
-    setPrevIsAuthenticated(isAuthenticated);
-    if (!isAuthenticated) {
-      setDropdownOpen(false);
-    }
-  }
-
-  // Cerrar todo al cambiar de página (mismo patrón que arriba).
+  // Cerrar todo al cambiar de página. Ajustamos el estado durante el render (en vez de
+  // en un efecto) para evitar un render en cascada:
+  // https://react.dev/learn/you-might-not-need-an-effect
   const [prevPathname, setPrevPathname] = useState(pathname);
   if (pathname !== prevPathname) {
     setPrevPathname(pathname);
@@ -125,20 +110,13 @@ export function Navbar() {
           </button>
 
           {/* Logo */}
-          <Link href="/" className="group flex items-center gap-2">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--brand)] text-xs font-bold text-[var(--brand-foreground)] transition-opacity group-hover:opacity-90">
-              DC
-            </span>
-
-            <span className="text-base font-semibold tracking-tight">
-              Distri Choco
-            </span>
+          <Link href="/" className="group flex items-center transition-opacity hover:opacity-90">
+            <TenantBrand markClassName="h-8 w-8 text-xs" />
           </Link>
 
-          {/* Navegación desktop */}
-          {/* Navegación desktop */}
+          {/* Navegación desktop: el catálogo es público */}
           <nav className="hidden items-center sm:flex">
-            {isAuthenticated && (
+            {(
               <div ref={dropdownRef} className="relative">
                 <button
                   type="button"
@@ -176,14 +154,14 @@ export function Navbar() {
 
                     <div className="my-1 border-t" />
 
-                    {CATEGORIES.map((cat) => (
+                    {categories.map((cat) => (
                       <Link
-                        key={cat.slug}
+                        key={cat.id}
                         href={`/catalogo/${cat.slug}`}
                         role="menuitem"
                         className="block rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                       >
-                        {cat.label}
+                        {cat.name}
                       </Link>
                     ))}
                   </div>
@@ -212,8 +190,8 @@ export function Navbar() {
             </div>
           )}
 
-          {/* Acciones del lado derecho */}
-          {isAuthenticated && (
+          {/* Carrito: lo ve cualquier visitante (la cuenta se pide al finalizar) */}
+          {(
             <Link
               href="/checkout"
               className={cn(
@@ -323,8 +301,8 @@ export function Navbar() {
                   </Link>
                 )}
 
-                {/* Navegación del cliente */}
-                {isAuthenticated && (
+                {/* Navegación de la tienda (pública) */}
+                {(
                   <Fragment>
                     <Link
                       href="/catalogo"
@@ -338,13 +316,13 @@ export function Navbar() {
                     </p>
 
                     <div className="mt-1 space-y-0.5">
-                      {CATEGORIES.map((cat) => (
+                      {categories.map((cat) => (
                         <Link
-                          key={cat.slug}
+                          key={cat.id}
                           href={`/catalogo/${cat.slug}`}
                           className="block rounded-md px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                         >
-                          {cat.label}
+                          {cat.name}
                         </Link>
                       ))}
                     </div>

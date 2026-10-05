@@ -1,4 +1,5 @@
-import { API_URL } from "@/lib/api";
+import { getApiUrl } from "@/lib/api";
+import { tenantHeaders } from "@/lib/fetcher";
 import type { AnalyticsEventType } from "@/features/admin/analytics/schemas/analytics-schema";
 
 export interface CatalogEventCreate {
@@ -13,9 +14,10 @@ export interface CatalogEventCreate {
 
 export async function trackCatalogEventApi(payload: CatalogEventCreate): Promise<void> {
   try {
-    await fetch(`${API_URL}/api/analytics/events`, {
+    await fetch(`${getApiUrl()}/api/analytics/events`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // X-Tenant-Domain: el visitante no tiene sesión, la tienda se sabe por el dominio.
+      headers: { "Content-Type": "application/json", ...tenantHeaders() },
       body: JSON.stringify(payload),
     });
   } catch {

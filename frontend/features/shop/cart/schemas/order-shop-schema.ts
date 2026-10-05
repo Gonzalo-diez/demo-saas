@@ -88,7 +88,7 @@ export function createOrderShopSchema(hasRegulatedItems: boolean) {
           code: "custom",
           path: ["customer_dni"],
           error:
-            "Tu pedido incluye productos de tabaco: el DNI es obligatorio.",
+            "Tu pedido incluye productos con venta restringida: el DNI es obligatorio.",
         });
       }
 

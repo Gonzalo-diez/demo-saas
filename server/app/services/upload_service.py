@@ -28,7 +28,11 @@ ALLOWED_IMAGE_TYPES = {
 MAX_FILE_SIZE_MB = 5
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
-async def upload_product_image(file: UploadFile, tenant_id: int | None = None) -> dict:
+async def upload_product_image(
+    file: UploadFile,
+    tenant_id: int | None = None,
+    subfolder: str | None = None,
+) -> dict:
     if not settings.CLOUDINARY_CLOUD_NAME or not settings.CLOUDINARY_API_KEY or not settings.CLOUDINARY_API_SECRET:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -61,10 +65,18 @@ async def upload_product_image(file: UploadFile, tenant_id: int | None = None) -
             detail=f"La imagen supera los {MAX_FILE_SIZE_MB} MB permitidos.",
         )
 
+    folder = (
+        f"{settings.CLOUDINARY_FOLDER}/tenant-{tenant_id}"
+        if tenant_id is not None
+        else settings.CLOUDINARY_FOLDER
+    )
+    if subfolder:
+        folder = f"{folder}/{subfolder}"
+
     try:
         result = cloudinary.uploader.upload(
             contents,
-            folder=f"{settings.CLOUDINARY_FOLDER}/tenant-{tenant_id}" if tenant_id is not None else settings.CLOUDINARY_FOLDER,
+            folder=folder,
             resource_type="image",
             overwrite=False,
             unique_filename=True,

@@ -13,14 +13,13 @@ export default function robots(): MetadataRoute.Robots {
           // un crawler (evita que quede el título "Login" indexado).
           "/admin",
           "/login",
+          "/platform",
 
           // Login/registro de clientes de la tienda.
           "/ingresar",
 
-          // Catálogo: requiere sesión de cliente (RequireClientAuth).
-          // Un crawler sin cookie nunca ve productos reales, solo el
-          // estado de "Cargando...", así que no hay nada que indexar.
-          "/catalogo",
+          // El catálogo (/catalogo) es público y SÍ se indexa. Ojo: se renderiza en
+          // el cliente con los datos de la distribuidora del dominio.
 
           // Checkout: formularios con datos personales, cero valor SEO.
           "/checkout",

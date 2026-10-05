@@ -34,3 +34,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Multi-tenant (SaaS de distribuidoras)
+
+- **Panel de plataforma** (`/platform/login`): el admin de plataforma crea distribuidoras
+  (con su primer administrador) y otros admins. Usa `/api/admin/*` y `/api/tenants/*`.
+- **Panel de la distribuidora** (`/login`): el dueño ingresa con el **código** de su distribuidora
+  (ej. `distri-oeste`), crea vendedores, categorías y productos.
+- **Tienda de clientes** (`/ingresar`): ingresan con el mismo código de distribuidora.
+- El código se manda en el header `X-Tenant-Slug` (ver `lib/fetcher.ts`) y se recuerda en el navegador.
+  Los links `?tenant=<codigo>` lo precargan; desde Plataforma → Distribuidoras se copian listos.
+- Las categorías ya no son fijas: cada distribuidora crea las suyas (`/admin/categories`), puede
+  publicarlas u ocultarlas del catálogo y marcar las que requieren verificación de edad (+18).
+
+Estilo: tokens de color/tipografía en `app/globals.css` (paleta crema/bosque/tomate; fuentes
+Instrument Sans + Bricolage Grotesque).

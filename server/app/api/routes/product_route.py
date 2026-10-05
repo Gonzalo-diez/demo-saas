@@ -7,7 +7,7 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 from app.db.base import get_db, get_db_with_commit
 from app.core.rate_limit import limiter
-from app.core.dependencies import get_current_active_user, get_current_catalog_viewer
+from app.core.dependencies import get_current_active_user, get_optional_catalog_viewer
 from app.models.client_model import Client
 from app.models.sales_rep_model import SalesRep
 from app.services.product_service import ProductService
@@ -19,8 +19,9 @@ from app.schemas.product_schema import (
     ProductUpdate, 
     ProductListResponse,
     ProductFiltersResponse,
-    ProductCategoriesResponse,
-    ProductSort
+    ProductSort,
+    PublicProductListResponse,
+    PublicProductResponse,
 )
 from app.schemas.product_import_schema import (
     ProductImportCommitRequest,
@@ -32,7 +33,10 @@ router = APIRouter(prefix="/products", tags=["Products"])
 
 # --- ENDPOINTS DE CONSULTA Y CRUD ---
 
-@router.get("/", response_model=ProductListResponse)
+# Staff -> respuesta completa (con costo, stock mínimo, estado). Visitantes y clientes ->
+# vista de tienda, sin datos internos. IMPORTANTE: el modelo completo va primero en la
+# unión para que la respuesta del personal no se recorte.
+@router.get("/", response_model=ProductListResponse | PublicProductListResponse)
 @limiter.limit("60/minute")
 def get_products(
     request: Request,
@@ -44,21 +48,27 @@ def get_products(
     is_active: bool | None = Query(True),
     sort: ProductSort | None = Query(None),
     catalog_only: bool | None = Query(None),
+    category_id: int | None = Query(None, gt=0),
+    is_public: bool | None = Query(None),
     db: Session = Depends(get_db),
-    viewer: SalesRep | Client = Depends(get_current_catalog_viewer),
+    viewer: SalesRep | Client | None = Depends(get_optional_catalog_viewer),
 ):
-    """Lista productos con filtros normalizados."""
+    """Lista productos con filtros normalizados. Visitantes sin login también pueden verla."""
 
-    # Un Client (tienda online) SIEMPRE ve solo categorías de catálogo: el query
-    # `catalog_only` no puede usarse para saltearlo. Un SalesRep puede elegir
-    # (por defecto ve todo, catalog_only=true sirve para previsualizar la tienda).
-    if isinstance(viewer, Client):
+    # Un visitante o un Client (tienda online) SIEMPRE ve solo lo publicado (producto
+    # público, activo y de categoría pública): los query `catalog_only`, `is_active` e
+    # `is_public` no pueden usarse para saltearlo. Un SalesRep ve todo por defecto;
+    # catalog_only=true le sirve para previsualizar lo que ven los clientes.
+    is_staff = isinstance(viewer, SalesRep)
+    if not is_staff:
         is_catalog_only = True
+        is_active = True
+        is_public = None
     else:
         is_catalog_only = bool(catalog_only)
 
     service = ProductService(db)
-    return service.list_products(
+    result = service.list_products(
         search=search,
         brand=brand,
         category=category,
@@ -67,45 +77,59 @@ def get_products(
         page_size=page_size,
         sort=sort,
         catalog_only=is_catalog_only,
+        category_id=category_id,
+        is_public=is_public,
+    )
+
+    if is_staff:
+        return result
+    return PublicProductListResponse(
+        items=[PublicProductResponse.model_validate(item.model_dump()) for item in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
     )
 
 @router.get("/filters", response_model=ProductFiltersResponse)
 def get_product_filters(
     db: Session = Depends(get_db),
-    viewer: SalesRep | Client = Depends(get_current_catalog_viewer),
+    viewer: SalesRep | Client | None = Depends(get_optional_catalog_viewer),
 ):
     """Obtiene marcas y categorías únicas para los filtros de la UI."""
     service = ProductService(db)
-    return service.get_product_filters(catalog_only=isinstance(viewer, Client))
+    return service.get_product_filters(catalog_only=not isinstance(viewer, SalesRep))
 
-@router.get("/categories", response_model=ProductCategoriesResponse)
-def get_product_categories(
-    db: Session = Depends(get_db),
-    _: SalesRep = Depends(get_current_active_user),
-):
-    """Opciones de categoría para el alta manual (catálogo / libres / alias)."""
-    service = ProductService(db)
-    return service.get_category_options()
+# Las categorías se administran en /api/categories (cada distribuidora crea las suyas).
 
-# Importante: va antes de "/{product_id}" para que "categories" no se interprete como un ID.
-@router.get("/{product_id}", response_model=ProductResponse)
+@router.get("/{product_id}", response_model=ProductResponse | PublicProductResponse)
 def get_product(
     product_id: int,
     db: Session = Depends(get_db),
-    _: SalesRep | Client = Depends(get_current_catalog_viewer),
+    viewer: SalesRep | Client | None = Depends(get_optional_catalog_viewer),
 ):
     service = ProductService(db)
-    return service.get_product(product_id)
+    is_staff = isinstance(viewer, SalesRep)
+    # Un visitante o cliente solo puede ver un producto si está publicado en el catálogo.
+    product = service.get_product(product_id, catalog_only=not is_staff)
+    if is_staff:
+        return product
+    return PublicProductResponse.model_validate(product)
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(
     product_in: ProductCreateAdmin, 
     db: Session = Depends(get_db_with_commit),
-    _: SalesRep = Depends(get_current_active_user)
+    current_user: SalesRep = Depends(get_current_active_user)
 ):
-    """Crea un producto aplicando normalización y generación de slug única."""
+    """
+    Crea un producto aplicando normalización y generación de slug única.
+
+    El precio de venta se manda directo (`unit_price`) o se calcula con `markup_percent`
+    sobre el costo (costo 200 + 40% = 280, redondeado al peso entero). El stock inicial
+    queda como primera entrada del historial de compras, con su `expiry_date` si se carga.
+    """
     service = ProductService(db)
-    return service.create_product(product_in=product_in)
+    return service.create_product(product_in=product_in, created_by=current_user.id)
 
 @router.patch("/{product_id}", response_model=ProductResponse)
 def update_product(
@@ -136,6 +160,26 @@ def reactivate_product(
     """Reactivación de un producto previamente desactivado."""
     service = ProductService(db)
     return service.reactivate_product(product_id=product_id)
+
+@router.patch("/{product_id}/publish", response_model=ProductResponse)
+def publish_product(
+    product_id: int,
+    db: Session = Depends(get_db_with_commit),
+    _: SalesRep = Depends(get_current_active_user)
+):
+    """Publica el producto en el catálogo de clientes."""
+    service = ProductService(db)
+    return service.set_public(product_id, True)
+
+@router.patch("/{product_id}/unpublish", response_model=ProductResponse)
+def unpublish_product(
+    product_id: int,
+    db: Session = Depends(get_db_with_commit),
+    _: SalesRep = Depends(get_current_active_user)
+):
+    """Lo saca del catálogo de clientes (sigue disponible para venta B2B)."""
+    service = ProductService(db)
+    return service.set_public(product_id, False)
 
 @router.post("/import/preview", response_model=ProductImportPreviewResponse)
 @limiter.limit("5/minute")

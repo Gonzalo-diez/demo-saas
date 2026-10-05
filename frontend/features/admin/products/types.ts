@@ -7,10 +7,14 @@ export type Product = {
   brand: string | null;
   brand_normalized: string;
   category: string;
+  category_id: number | null;
   category_normalized: string;
+  is_public: boolean;
   slug: string;
   unit_cost: number;
   unit_price: number;
+  /** % de remarque sobre el costo con el que se calculó el precio (si se usó). */
+  markup_percent: number | null;
   currency: string;
   stock_current: number;
   stock_min: number;
@@ -34,8 +38,17 @@ export type CreateProductInput = {
   name: string;
   brand?: string | null;
   category?: string | null;
+  /** Categoría elegida (de /api/categories). Es lo normal; `category` (texto) queda para importaciones. */
+  category_id?: number | null;
+  /** Visible en el catálogo de la tienda (además de que la categoría sea pública). */
+  is_public?: boolean;
   unit_cost: number;
-  unit_price: number;
+  /** Precio de venta. No se manda si se usa `markup_percent` (el backend lo calcula y redondea). */
+  unit_price?: number;
+  /** % de remarque sobre el costo: costo 200 + 40% = 280, redondeado al peso entero. */
+  markup_percent?: number;
+  /** Vencimiento del stock inicial (necesita stock_current > 0). Solo en el alta. */
+  expiry_date?: string | null;
   description?: string | null;
   currency?: string | null;
   stock_current?: number;
@@ -110,17 +123,3 @@ export type UploadedImageResponse = {
   original_filename: string;
 }
 
-// --- Categorías para el alta/edición manual (GET /products/categories) ---
-export type CategoryOption = {
-  value: string;
-  label: string;
-};
-
-export type ProductCategoriesResponse = {
-  /** Categorías seteadas: se muestran en el catálogo online. */
-  catalog: CategoryOption[];
-  /** Categorías libres ya en uso: solo venta B2B. */
-  free: string[];
-  /** alias normalizado -> categoría canónica de catálogo. */
-  catalog_aliases: Record<string, string>;
-};

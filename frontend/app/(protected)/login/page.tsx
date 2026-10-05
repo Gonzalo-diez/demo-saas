@@ -1,23 +1,16 @@
 import { LoginForm } from "@/features/admin/auth/components/login-form";
+import { TenantBrand } from "@/features/tenant/components/tenant-brand";
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/50 p-6">
-      <div className="w-full max-w-sm rounded-xl border bg-background p-6 shadow-sm">
-        {/* Logo */}
-        <div className="mb-6 flex items-center gap-2.5 border-b pb-5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-foreground text-xs font-bold text-background">
-            DC
-          </span>
-          <div>
-            <p className="text-sm font-semibold leading-none">Distri Choco</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Panel interno
-            </p>
-          </div>
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-sm rounded-3xl bg-card p-7 ring-[1.5px] ring-border">
+        <div className="mb-6 border-b pb-5">
+          <TenantBrand />
+          <p className="mt-1.5 text-xs text-muted-foreground">Panel interno</p>
         </div>
 
-        <h1 className="mb-1 text-xl font-semibold">Bienvenido</h1>
+        <h1 className="mb-1 text-2xl font-bold">Bienvenido</h1>
         <p className="mb-6 text-sm text-muted-foreground">
           Ingresá tus credenciales para acceder al panel.
         </p>

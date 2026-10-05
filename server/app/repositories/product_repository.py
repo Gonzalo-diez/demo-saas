@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from decimal import Decimal
@@ -7,12 +7,48 @@ from app.models.product_model import Product
 from app.schemas.product_schema import ProductCreateAdmin, ProductCreateDraft, ProductUpdate
 from app.utils.normalize_text import normalize_text
 from app.utils.slug import slugify
-from app.utils.category_normalizer import get_all_canonical_categories
+from app.models.category_model import Category
+from app.repositories.category_repository import CategoryRepository
 
 class ProductRepository:
     def __init__(self, db: Session):
         self.db = db
         
+    def _resolve_category_fields(self, data: dict) -> None:
+        """
+        category_id (fuente de verdad) y category (copia del nombre) siempre
+        quedan consistentes. Acepta category_id o, para importaciones, el nombre
+        (se busca o se crea privada). Ver CategoryRepository.resolve_for_product.
+        """
+        category = CategoryRepository(self.db).resolve_for_product(
+            category_id=data.get("category_id"),
+            category_name=data.get("category"),
+        )
+        if category is not None:
+            data["category_id"] = category.id
+            data["category"] = category.name
+            data["category_normalized"] = category.name_normalized
+        else:
+            data["category_id"] = None
+            data["category"] = "Sin Clasificar"
+            data["category_normalized"] = "sin clasificar"
+
+    @staticmethod
+    def _apply_catalog_visibility(query):
+        """
+        Lo que ve un cliente en el catálogo: producto activo y publicado, y con su
+        categoría (si tiene) también pública.
+        """
+        private_categories = select(Category.id).where(Category.is_public.is_(False))
+        return query.where(
+            Product.is_active.is_(True),
+            Product.is_public.is_(True),
+            or_(
+                Product.category_id.is_(None),
+                Product.category_id.not_in(private_categories),
+            ),
+        )
+
     def _normalize_update_data(self, data: dict) -> dict:
         normalized = data.copy()
 
@@ -22,20 +58,19 @@ class ProductRepository:
         if "brand" in normalized:
             normalized["brand_normalized"] = normalize_text(normalized["brand"])
 
-        if "category" in normalized:
-            normalized["category_normalized"] = normalize_text(normalized["category"])
+        if "category_id" in normalized or "category" in normalized:
+            self._resolve_category_fields(normalized)
 
         return normalized
         
     def _prepare_data(self, data: dict) -> dict:
         # Aseguramos que existan valores para las columnas NOT NULL
         if not data.get("brand"): data["brand"] = "Pendiente"
-        if not data.get("category"): data["category"] = "Sin Clasificar"
-        
+
         # Normalización
         data["name_normalized"] = normalize_text(data.get("name") or "")
         data["brand_normalized"] = normalize_text(data["brand"])
-        data["category_normalized"] = normalize_text(data["category"])
+        self._resolve_category_fields(data)
         
         return data
 
@@ -49,17 +84,24 @@ class ProductRepository:
         page_size: int = 20,
         sort: str | None = None,
         catalog_only: bool = False,
+        category_id: int | None = None,
+        is_public: bool | None = None,
     ):
         query = select(Product)
 
         if is_active is not None:
             query = query.where(Product.is_active == is_active)
 
+        if is_public is not None:
+            query = query.where(Product.is_public.is_(is_public))
+
         if catalog_only:
-            # El catálogo online (visto por un Client) solo puede mostrar
-            # categorías "seteadas"; las categorías libres/internas son
-            # para venta B2B y nunca deben llegar a este listado.
-            query = query.where(Product.category_normalized.in_(get_all_canonical_categories()))
+            # Vista de catálogo (la de un cliente): solo productos activos y públicos
+            # de categorías públicas. Lo privado es solo para venta B2B interna.
+            query = self._apply_catalog_visibility(query)
+
+        if category_id is not None:
+            query = query.where(Product.category_id == category_id)
 
         if search:
             search_term = f"%{search.strip()}%"
@@ -102,8 +144,10 @@ class ProductRepository:
         query = select(Product).where(Product.name.ilike(normalized_product_name))
         return self.db.scalar(query)
 
-    def get_product_by_id(self, product_id: int):
+    def get_product_by_id(self, product_id: int, catalog_only: bool = False):
         query = select(Product).where(Product.id == product_id)
+        if catalog_only:
+            query = self._apply_catalog_visibility(query)
         return self.db.scalar(query)
 
     def get_product_by_sku(self, sku: str):
@@ -176,6 +220,8 @@ class ProductRepository:
     def create_product_no_commit(self, product_in: ProductCreateAdmin | ProductCreateDraft) -> Product:
         # Convertimos el schema a dict y aplicamos normalización
         data = self._prepare_data(product_in.model_dump())
+        # Solo viaja en el alta (vencimiento del stock inicial): vive en el historial de compras.
+        data.pop("expiry_date", None)
         
         # Manejo automático de Slug si no viene
         if not data.get("slug"):
@@ -265,8 +311,8 @@ class ProductRepository:
         categories_query = select(Product.category).where(Product.is_active == True)
 
         if catalog_only:
-            brands_query = brands_query.where(Product.category_normalized.in_(get_all_canonical_categories()))
-            categories_query = categories_query.where(Product.category_normalized.in_(get_all_canonical_categories()))
+            brands_query = self._apply_catalog_visibility(brands_query)
+            categories_query = self._apply_catalog_visibility(categories_query)
 
         brands = self.db.scalars(
             brands_query.distinct().order_by(Product.brand)
@@ -280,21 +326,6 @@ class ProductRepository:
             "brands": brands,
             "categories": categories,
         }
-
-    def get_free_categories(self) -> list[str]:
-        """
-        Categorías libres (fuera de la whitelist de catálogo) en uso, sin
-        duplicados por normalización. Incluye productos inactivos, porque
-        la categoría sigue siendo válida para reutilizar.
-        """
-        query = (
-            select(func.min(Product.category))
-            .where(Product.category_normalized.not_in(get_all_canonical_categories()))
-            .where(Product.category.is_not(None))
-            .group_by(Product.category_normalized)
-        )
-        categories = self.db.scalars(query).all()
-        return sorted((c for c in categories if c and c.strip()), key=str.casefold)
 
     def bulk_create_products(self, products: list[dict]):
         normalized_products = [Product(**self._prepare_data(product_data)) for product_data in products]

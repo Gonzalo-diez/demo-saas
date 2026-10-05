@@ -3,6 +3,7 @@ from app.models.client_branch_model import ClientBranch
 from app.models.client_payment_allocation_model import ClientPaymentAllocation
 from app.models.order_model import Order
 from app.models.order_item_model import OrderItem
+from app.models.category_model import Category
 from app.models.product_model import Product
 from app.models.purchase_invoice_model import PurchaseInvoice
 from app.models.purchase_invoice_item_model import PurchaseInvoiceItem
@@ -20,6 +21,7 @@ from app.models.supplier_model import Supplier
 from app.models.supplier_account_movement_model import SupplierAccountMovement
 from app.models.supplier_payment_allocation_model import SupplierPaymentAllocation
 from app.models.inventory_movement_model import InventoryMovement
+from app.models.product_purchase_model import ProductPurchase
 from app.models.client_account_movement_model import ClientAccountMovement
 from app.models.notification_model import Notification, NotificationRead
 from app.models.mixin_model import TenantMixin

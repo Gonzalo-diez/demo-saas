@@ -10,6 +10,7 @@ from app.models.client_model import Client
 from app.models.client_branch_model import ClientBranch
 from app.models.client_payment_allocation_model import ClientPaymentAllocation
 from app.models.client_account_movement_model import ClientAccountMovement
+from app.models.category_model import Category
 from app.models.product_model import Product
 from app.models.order_model import Order
 from app.models.order_item_model import OrderItem
@@ -30,9 +31,9 @@ from app.models.sales_quote_item_model import SalesQuoteItem
 from app.models.sales_quote_payment_model import SalesQuotePayment
 from app.models.check_model import Check
 from app.models.tenant_model import Tenant
+from app.models.admin_model import Admin
 from app.models.mixin_model import TenantMixin
 from app.models.notification_model import Notification
-from app.models.admin_model import Admin
 from app.analytics.models.analytics_daily_model import AnalyticsDaily
 from app.analytics.models.analytics_product_daily_model import AnalyticsProductDaily
 from app.analytics.models.analytics_sales_rep_daily_model import AnalyticsSalesRepDaily

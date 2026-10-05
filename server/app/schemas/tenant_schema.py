@@ -5,6 +5,8 @@ from math import ceil
 import re
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from app.utils.domain import normalize_domain
+
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
@@ -19,9 +21,17 @@ def _normalize_slug(value):
     return value
 
 
+def _normalize_domain_field(value):
+    if value is None:
+        return value
+    return normalize_domain(value)
+
+
 class TenantBase(BaseModel):
     name: str = Field(..., max_length=255)
     slug: str = Field(..., max_length=100)
+    # Dominio o URL de la página de la distribuidora (se guarda solo el host).
+    domain: str = Field(..., max_length=255)
     logo_url: str | None = Field(default=None, max_length=500)
     email: EmailStr | None = Field(default=None, max_length=255)
     is_active: bool = True
@@ -30,6 +40,11 @@ class TenantBase(BaseModel):
     @classmethod
     def _validate_slug(cls, v):
         return _normalize_slug(v)
+
+    @field_validator("domain", mode="before")
+    @classmethod
+    def _validate_domain(cls, v):
+        return _normalize_domain_field(v)
 
 
 class TenantCreate(TenantBase):
@@ -55,6 +70,7 @@ class TenantProvision(TenantCreate):
 class TenantUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=255)
     slug: str | None = Field(default=None, max_length=100)
+    domain: str | None = Field(default=None, max_length=255)
     logo_url: str | None = Field(default=None, max_length=500)
     email: EmailStr | None = Field(default=None, max_length=255)
     is_active: bool | None = None
@@ -64,12 +80,18 @@ class TenantUpdate(BaseModel):
     def _validate_slug(cls, v):
         return _normalize_slug(v)
 
+    @field_validator("domain", mode="before")
+    @classmethod
+    def _validate_domain(cls, v):
+        return _normalize_domain_field(v)
+
 
 class TenantPublicResponse(BaseModel):
     """Datos mínimos y no sensibles de una distribuidora (pantalla de login / branding)."""
     id: int
     name: str
     slug: str
+    domain: str
     logo_url: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

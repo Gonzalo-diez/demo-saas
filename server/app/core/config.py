@@ -36,30 +36,25 @@ class Settings(BaseSettings):
     # Tenant inicial (se crea al arrancar si no existe)
     FIRST_TENANT_NAME: str = Field(default="Principal")
     FIRST_TENANT_SLUG: str = Field(default="main")
+    # Dominio de la tienda del tenant inicial. En desarrollo, "*.localhost" resuelve a
+    # 127.0.0.1 en los navegadores, así que no hace falta tocar el archivo hosts.
+    FIRST_TENANT_DOMAIN: str = Field(default="main.localhost")
     FIRST_TENANT_EMAIL: str | None = None
-    
-    # Admin inicial (se crea al arrancar si no existe)
-    FIRST_ADMIN_NAME: str | None = None
+
+    # Administradores de la PLATAFORMA (alta/baja de distribuidoras).
+    # Son una tabla aparte (admins) y se loguean en /api/admin/login.
+    # El primero se crea al arrancar si estas dos variables están completas.
+    FIRST_ADMIN_NAME: str = Field(default="Platform Admin")
     FIRST_ADMIN_EMAIL: str | None = None
     FIRST_ADMIN_PASSWORD: str | None = None
 
-    # Administración de la plataforma (alta/baja de distribuidoras).
-    # Se manda en el header X-Platform-Key. Si está vacío, esos endpoints
-    # quedan deshabilitados (403).
-    PLATFORM_ADMIN_KEY: str | None = None
-    
     # Cookies
-    AUTH_COOKIE_NAME: str = Field(default="demo_auth_token")
-    CLIENT_AUTH_COOKIE_NAME: str = Field(default="demo_client_token")
-    PLATFORM_AUTH_COOKIE_NAME: str = Field(default="demo_platform_token")
+    AUTH_COOKIE_NAME: str = Field(default="districhocomap_token")
+    PLATFORM_AUTH_COOKIE_NAME: str = Field(default="districhocomap_platform_token")
+    CLIENT_AUTH_COOKIE_NAME: str = Field(default="districhocomap_client_token")
     AUTH_COOKIE_SECURE: bool = Field(default=False)
     AUTH_COOKIE_SAMESITE: str = Field(default="lax")
     AUTH_COOKIE_PATH: str = Field(default="/")
-    
-    # Gemini
-    GEMINI_API_KEY: str | None = None
-    GEMINI_MODEL: str = "gemini-2.5-flash"
-    GEMINI_TEMPERATURE: float = 0.2
     
     # Cloudinary
     CLOUDINARY_CLOUD_NAME: str | None = None
@@ -79,6 +74,13 @@ class Settings(BaseSettings):
     WHATSAPP_PHONE_NUMBER_ID: str | None = None
     WHATSAPP_BUSINESS_NAME: str = Field(default="Districhoco")
     
+    # Rate limiting (slowapi). Se puede apagar para demos locales con varios usuarios.
+    RATE_LIMIT_ENABLED: bool = Field(default=True)
+    # Cuántos proxies de confianza hay delante del backend (frontend que reenvía /api, nginx,
+    # Cloudflare...). 0 = ninguno: el límite se cuenta por la IP de conexión. Con N > 0 se toma
+    # la IP real de X-Forwarded-For (la N-ésima desde la derecha). Ver app/core/rate_limit.py.
+    TRUSTED_PROXY_HOPS: int = Field(default=0, ge=0, le=5)
+
     # CORS
     FRONTEND_ORIGIN: str = Field(default="http://localhost:3000")
 

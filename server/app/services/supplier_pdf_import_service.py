@@ -18,29 +18,28 @@ from openpyxl.styles import (
 )
 from openpyxl.utils import get_column_letter
 
-from app.constants.products_constant import ALLOWED_CATEGORIES
-from app.utils.category_normalizer import CATEGORY_LABELS
-
 # ---------------------------------------------------------------------------
 # Mapeos y constantes del proveedor
 # ---------------------------------------------------------------------------
 
-# Mapeo de encabezados de sección del PDF al canonical del backend.
+# Mapeo de encabezados de sección del PDF al NOMBRE de categoría que se propone en
+# el Excel. Al importar, cada nombre se busca entre las categorías de la distribuidora
+# y, si no existe, se crea privada (la distribuidora decide después si la publica).
 # Agregar nuevas secciones aquí si el proveedor las incorpora en el futuro.
 PDF_SECTION_TO_CATEGORY: dict[str, str] = {
-    "CIGARRILLOS":   "cigarrillos eco",
-    "BAT MODO":      "masalin bat",
-    "MASSALIN":      "masalin bat",
-    "TABACO":        "tabaco accesorios",
-    "PAPEL":         "tabaco accesorios",
-    "FILTROS":       "tabaco accesorios",
-    "MAQUINA":       "tabaco accesorios",
-    "ENCENDEDOR":    "tabaco accesorios",
-    "PUROS":         "tabaco accesorios",
-    "MEDICAMENTOS":  "analgesicos",
-    "PEGAMENTOS":    "pegamentos",
-    "PILAS":         "pilas",
-    "PRESERVATIVOS": "preservativos",
+    "CIGARRILLOS":   "Cigarrillos Eco",
+    "BAT MODO":      "Masalin Bat",
+    "MASSALIN":      "Masalin Bat",
+    "TABACO":        "Tabaco & Accesorios",
+    "PAPEL":         "Tabaco & Accesorios",
+    "FILTROS":       "Tabaco & Accesorios",
+    "MAQUINA":       "Tabaco & Accesorios",
+    "ENCENDEDOR":    "Tabaco & Accesorios",
+    "PUROS":         "Tabaco & Accesorios",
+    "MEDICAMENTOS":  "Analgésicos",
+    "PEGAMENTOS":    "Pegamentos",
+    "PILAS":         "Pilas",
+    "PRESERVATIVOS": "Preservativos",
 }
 
 # Marcas conocidas en el formato de este proveedor.
@@ -313,17 +312,12 @@ def build_excel(source: str | bytes) -> bytes:
         ("   • El sistema validará SKU únicos y campos requeridos.", False),
         ("", False),
         ("5. CATEGORÍAS:", True),
-        ("   • Si usás una de las categorías de catálogo de abajo, el producto", False),
-        ("     va a necesitar imagen para poder activarse y se va a poder ver", False),
-        ("     en la página online.", False),
-        ("   • Cualquier otro texto se guarda como categoría libre/interna: no", False),
-        ("     hace falta imagen, pero el producto NO aparece en la página online", False),
-        ("     (queda solo para venta B2B por remito/presupuesto).", False),
-        ("", False),
-        ("   CATEGORÍAS DE CATÁLOGO:", True),
+        ("   • Si el nombre coincide con una categoría que ya creaste, se usa esa", False),
+        ("     (con su configuración de público/privado).", False),
+        ("   • Si no existe, se crea una categoría nueva PRIVADA: los productos no", False),
+        ("     aparecen en el catálogo de clientes hasta que la publiques desde", False),
+        ("     Categorías. Mientras tanto quedan disponibles para venta B2B.", False),
     ]
-    for cat in ALLOWED_CATEGORIES:
-        instrucciones.append((f"   • {cat}  →  {CATEGORY_LABELS[cat]}", False))
 
     for i, (text, bold) in enumerate(instrucciones, start=1):
         cell           = wi.cell(row=i, column=1, value=text)
@@ -348,7 +342,7 @@ def build_excel(source: str | bytes) -> bytes:
     for row_idx, cat in enumerate(sorted(counts.keys()), start=2):
         costs = counts[cat]
         avg   = sum(costs) / len(costs)
-        wr.cell(row=row_idx, column=1, value=CATEGORY_LABELS.get(cat, cat)).font = _DATA_FONT
+        wr.cell(row=row_idx, column=1, value=cat).font = _DATA_FONT
         wr.cell(row=row_idx, column=2, value=len(costs)).font                    = _DATA_FONT
         cell               = wr.cell(row=row_idx, column=3, value=round(avg, 2))
         cell.font          = _DATA_FONT

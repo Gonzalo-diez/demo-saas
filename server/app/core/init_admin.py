@@ -24,6 +24,7 @@ def create_first_tenant(db: Session):
 
     tenant_name = settings.FIRST_TENANT_NAME
     tenant_slug = settings.FIRST_TENANT_SLUG
+    tenant_domain = settings.FIRST_TENANT_DOMAIN
     tenant_email = settings.FIRST_TENANT_EMAIL or settings.FIRST_SUPERUSER_EMAIL
 
     repo = TenantRepository(db)
@@ -40,6 +41,7 @@ def create_first_tenant(db: Session):
             TenantCreate(
                 name=tenant_name,
                 slug=tenant_slug,
+                domain=tenant_domain,
                 email=tenant_email,
                 is_active=True,
             )

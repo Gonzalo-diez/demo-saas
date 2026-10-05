@@ -3,7 +3,6 @@
 import { useDashboardSummary } from "@/features/admin/dashboard/hooks/use-dashboard-summary";
 import { QuickActions } from "@/features/admin/dashboard/components/quick-actions";
 import { StatsCards } from "@/features/admin/dashboard/components/stats-cards";
-import { AiAssistantCard } from "@/features/admin/ai/components/ai-assistant-card";
 
 export function DashboardView() {
   const { data, isLoading, isError } = useDashboardSummary();
@@ -47,8 +46,6 @@ export function DashboardView() {
       ) : (
         <StatsCards items={stats} isLoading={isLoading} />
       )}
-
-      <AiAssistantCard />
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Accesos rápidos</h2>

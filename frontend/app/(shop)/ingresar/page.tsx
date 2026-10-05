@@ -4,8 +4,8 @@ import { LoginPageClient } from "@/app/(shop)/ingresar/login-page-client";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: "Ingresar | Distri Choco",
-    description: "Iniciá sesión para ver el catálogo y hacer tu pedido.",
+    title: "Ingresar",
+    description: "Ingresá o creá tu cuenta para hacer tu pedido.",
   };
 }
 

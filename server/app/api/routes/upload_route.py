@@ -15,3 +15,16 @@ async def upload_image(
 ):
     # Cada distribuidora sube a su propia carpeta de Cloudinary.
     return await upload_product_image(file, tenant_id=current_user.tenant_id)
+
+
+@router.post("/category-image")
+@limiter.limit("5/minute")
+async def upload_category_image(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: SalesRep = Depends(get_current_superuser),
+):
+    """Sube la imagen de una categoría; la URL devuelta va en `image_url` de la categoría."""
+    return await upload_product_image(
+        file, tenant_id=current_user.tenant_id, subfolder="categorias"
+    )

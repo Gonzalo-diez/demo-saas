@@ -3,6 +3,16 @@ export type ClientLoginInput = {
   password: string;
 };
 
+// Espejo de ClientRegister (POST /api/clients/register)
+export type ClientRegisterInput = {
+  name: string;
+  email: string;
+  password: string;
+  phone: string;
+  tax_id?: string;
+  client_type: "individual" | "company";
+};
+
 // Espejo de ClientResponse del backend (app/schemas/client_schema.py)
 export type ClientUser = {
   id: number;

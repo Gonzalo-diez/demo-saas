@@ -1,10 +1,9 @@
 import type { MetadataRoute } from "next";
 import { env } from "@/lib/env";
 
-// El catálogo (/catalogo) y todo lo demás sigue atrás de login
-// (RequireClientAuth), así que no tiene sentido listarlo acá: un
-// crawler no ve contenido real ahí. Si en algún momento se abre el
-// catálogo (o parte) sin login, sus páginas se agregan acá.
+// El catálogo es público. Las categorías son de cada distribuidora y se cargan en el
+// cliente, así que acá solo listamos las páginas fijas. Para indexar cada categoría
+// habría que generar este sitemap por dominio (leyendo el host de la request).
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
@@ -12,6 +11,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 1,
+    },
+    {
+      url: `${env.siteUrl}/catalogo`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
     },
   ];
 }

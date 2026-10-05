@@ -8,6 +8,7 @@ type Props = {
   href: string;
   image_url?: string;
   count?: number;
+  ageRestricted?: boolean;
 };
 
 export function ProductCategoryCard({
@@ -16,28 +17,30 @@ export function ProductCategoryCard({
   href,
   image_url,
   count,
+  ageRestricted,
 }: Props) {
   return (
     <Link
       href={href}
-      className="group block h-full overflow-hidden rounded-2xl border bg-background transition-all hover:-translate-y-0.5 hover:shadow-md"
+      className="group block h-full overflow-hidden rounded-3xl bg-card ring-[1.5px] ring-border transition-all hover:-translate-y-0.5 hover:shadow-md"
     >
       <article className="flex h-full flex-col">
-        {/* Imagen / Placeholder */}
-        <div className="relative h-40 w-full bg-muted sm:h-44 md:h-48">
+        {/* Usamos bg-card (o bg-white) para integrar todo el fondo de la tarjeta */}
+        <div className="relative aspect-square w-full overflow-hidden bg-card p-4 sm:aspect-[4/3]">
           {image_url ? (
             <Image
               src={image_url}
               alt={title}
               fill
               loading="eager"
-              className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              unoptimized={!image_url.startsWith("https://res.cloudinary.com/")}
+              className="object-contain p-2 mix-blend-multiply transition-transform duration-300 group-hover:scale-105"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
           ) : (
             <div className="flex h-full items-center justify-center">
               <svg
-                className="h-10 w-10 text-muted-foreground/30"
+                className="h-10 w-10 text-brand/40"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -58,17 +61,23 @@ export function ProductCategoryCard({
             </div>
           )}
 
-          {/* Badge de conteo — siempre visible, independiente de si hay imagen */}
+          {/* Badges */}
           {typeof count === "number" && (
-            <span className="absolute left-3 top-3 rounded-full bg-background/90 px-3 py-1 text-xs font-medium text-foreground backdrop-blur">
+            <span className="absolute left-3 top-3 z-10 rounded-full bg-muted/80 px-3 py-1 text-xs font-semibold text-foreground backdrop-blur">
               {count} productos
+            </span>
+          )}
+
+          {ageRestricted && (
+            <span className="absolute right-3 top-3 z-10 rounded-full bg-stamp px-2.5 py-1 text-xs font-bold text-stamp-foreground">
+              +18
             </span>
           )}
         </div>
 
         {/* Cuerpo */}
-        <div className="flex flex-1 flex-col p-4 sm:p-5">
-          <h3 className="text-lg font-semibold sm:text-xl">{title}</h3>
+        <div className="flex flex-1 flex-col p-4 sm:p-5 pt-0 sm:pt-0">
+          <h3 className="font-heading text-lg font-bold sm:text-xl">{title}</h3>
 
           {description && (
             <p className="mt-2 line-clamp-2 text-sm text-muted-foreground sm:text-base">
@@ -76,7 +85,7 @@ export function ProductCategoryCard({
             </p>
           )}
 
-          <div className="mt-auto pt-4 flex items-center gap-1.5 text-sm font-medium text-[var(--brand)]">
+          <div className="mt-auto pt-4 flex items-center gap-1.5 text-sm font-semibold text-brand">
             <span>Ver catálogo</span>
             <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </div>

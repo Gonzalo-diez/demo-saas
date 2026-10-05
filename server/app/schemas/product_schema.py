@@ -1,13 +1,15 @@
 from decimal import Decimal
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     field_validator,
+    model_validator,
 )
-from app.utils.category_normalizer import resolve_category_value
+
+from app.utils.pricing import price_from_markup
 
 ProductSort = Literal[
     "name-asc",
@@ -38,6 +40,10 @@ class ProductBase(BaseModel):
     is_active: bool | None = None
     status: str | None = None
 
+    # Publicado en el catálogo de clientes (además de estar activo y con su
+    # categoría pública). La distribuidora lo elige producto por producto.
+    is_public: bool = True
+
     # -------------------------
     # VALIDATORS COMPARTIDOS
     # -------------------------
@@ -61,14 +67,6 @@ class ProductBase(BaseModel):
             return cleaned or None
 
         return value
-
-    @field_validator("category", mode="before", check_fields=False)
-    @classmethod
-    def normalize_category(cls, value):
-        if value is None:
-            return value
-
-        return resolve_category_value(str(value))
 
     @field_validator("description", mode="before")
     @classmethod
@@ -107,7 +105,27 @@ class ProductBase(BaseModel):
 # =========================================
 
 class ProductCreateAdmin(ProductBase):
+    # Precio de venta: o se manda `unit_price` o se elige un % de remarque sobre el costo
+    # (`markup_percent`) y el precio se calcula y se redondea al peso entero:
+    # costo 200 + 40% = 280 · 400,50 -> 401. Si vienen los dos, manda el remarque.
+    unit_price: Decimal | None = Field(default=None, ge=0)
+    markup_percent: Decimal | None = Field(default=None, ge=0, le=10_000)
+
+    # Vencimiento del stock inicial (necesita stock_current > 0 para quedar en el historial).
+    expiry_date: date | None = None
+
+    @model_validator(mode="after")
+    def _resolve_sale_price(self):
+        if self.markup_percent is not None:
+            self.unit_price = price_from_markup(self.unit_cost, self.markup_percent)
+        elif self.unit_price is None:
+            raise ValueError("Ingresá el precio de venta o un % de remarque sobre el costo")
+        return self
+
     brand: str | None = Field(default=None, max_length=100)
+    # Lo normal: elegir una categoría ya creada (category_id). `category` (texto)
+    # queda para importaciones: se busca por nombre y, si no existe, se crea privada.
+    category_id: int | None = Field(default=None, gt=0)
     category: str | None = Field(default=None, max_length=100)
     image_url: str | None = None
 
@@ -118,6 +136,7 @@ class ProductCreateAdmin(ProductBase):
 
 class ProductCreateDraft(ProductBase):
     brand: str | None = Field(default=None, max_length=100)
+    category_id: int | None = Field(default=None, gt=0)
     category: str | None = Field(default=None, max_length=100)
     image_url: str | None = None
 
@@ -125,16 +144,20 @@ class ProductUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=2000)
     brand: str | None = Field(default=None, min_length=1, max_length=100)
+    category_id: int | None = Field(default=None, gt=0)
     category: str | None = Field(default=None, min_length=1, max_length=100)
     slug: str | None = Field(default=None, min_length=1, max_length=255)
     unit_cost: Decimal | None = Field(default=None, ge=0)
     unit_price: Decimal | None = Field(default=None, ge=0)
+    # Si se manda sin `unit_price`, el precio se recalcula: costo + remarque (redondeado).
+    markup_percent: Decimal | None = Field(default=None, ge=0, le=10_000)
     currency: str | None = Field(default=None, min_length=1, max_length=10)
     stock_current: int | None = Field(default=None, ge=0)
     stock_min: int | None = Field(default=None, ge=0)
     image_url: str | None = None
     status: str | None = None
     is_active: bool | None = None
+    is_public: bool | None = None
 
     @field_validator(
         "name",
@@ -153,14 +176,6 @@ class ProductUpdate(BaseModel):
             return cleaned or None
 
         return value
-
-    @field_validator("category", mode="before")
-    @classmethod
-    def normalize_category(cls, value):
-        if value is None:
-            return value
-
-        return resolve_category_value(str(value))
 
     @field_validator("description", mode="before")
     @classmethod
@@ -200,17 +215,20 @@ class ProductResponse(BaseModel):
     description: str | None
     brand: str | None
     brand_normalized: str | None
+    category_id: int | None = None
     category: str | None
     category_normalized: str | None
     slug: str
     unit_cost: Decimal
     unit_price: Decimal
+    markup_percent: Decimal | None = None
     currency: str
     stock_current: int
     stock_min: int
     sku: str | None
     image_url: str | None
     is_active: bool
+    is_public: bool = True
     status: str
     created_at: datetime
     updated_at: datetime
@@ -223,22 +241,35 @@ class ProductListResponse(BaseModel):
     page: int
     page_size: int
 
+
+# =========================================
+# VISTA DE LA TIENDA (visitantes y clientes)
+# =========================================
+# Lo que ve quien NO es personal de la distribuidora. A propósito no incluye el
+# costo (unit_cost), el stock mínimo, el estado interno ni los campos normalizados.
+
+class PublicProductResponse(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    brand: str | None
+    category_id: int | None = None
+    category: str | None
+    slug: str
+    unit_price: Decimal
+    currency: str
+    stock_current: int
+    sku: str | None
+    image_url: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class PublicProductListResponse(BaseModel):
+    items: list[PublicProductResponse]
+    total: int
+    page: int
+    page_size: int
+
 class ProductFiltersResponse(BaseModel):
     brands: list[str]
     categories: list[str]
-
-
-class CategoryOption(BaseModel):
-    value: str
-    label: str
-
-
-class ProductCategoriesResponse(BaseModel):
-    """Opciones de categoría para el alta/edición manual de productos (admin)."""
-
-    # Categorías seteadas: se muestran en el catálogo online.
-    catalog: list[CategoryOption]
-    # Categorías libres ya usadas por productos: solo venta B2B.
-    free: list[str]
-    # alias normalizado -> categoría canónica de catálogo (detección de colisiones).
-    catalog_aliases: dict[str, str]

@@ -153,48 +153,6 @@ class SalesRepRepository:
 
         return sales_rep
 
-    def get_sales_reps_for_map(
-        self,
-        search: str | None = None,
-        is_active: bool | None = None,
-        h3_indexes: list[str] | None = None,
-    ) -> list[SalesRep]:
-
-        stmt = select(SalesRep).where(
-            SalesRep.home_lat.is_not(None),
-            SalesRep.home_lng.is_not(None),
-        )
-
-        if search:
-            search_term = f"%{search.strip()}%"
-
-            stmt = stmt.where(
-                or_(
-                    SalesRep.name.ilike(search_term),
-                    SalesRep.email.ilike(search_term),
-                    SalesRep.phone.ilike(search_term),
-                )
-            )
-
-        if is_active is not None:
-            stmt = stmt.where(
-                SalesRep.is_active.is_(is_active)
-            )
-
-        # filtro geo H3
-        if h3_indexes:
-            stmt = stmt.where(
-                SalesRep.home_h3_index.in_(h3_indexes)
-            )
-
-        stmt = stmt.order_by(
-            SalesRep.name.asc()
-        )
-
-        return list(
-            self.db.scalars(stmt).all()
-        )
-
     def update_password(
         self,
         sales_rep: SalesRep,

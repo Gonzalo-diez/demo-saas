@@ -29,7 +29,7 @@ export function HeroCarousel() {
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--brand)]" />
               </span>
               <span className="font-mono text-[11px] font-medium uppercase tracking-widest text-background/80">
-                Distribuidora mayorista · Pedidos abiertos
+                Catálogo mayorista · Pedidos abiertos
               </span>
             </div>
 
@@ -40,8 +40,8 @@ export function HeroCarousel() {
             </h1>
 
             <p className="mt-6 max-w-md text-base text-background/70 sm:text-lg">
-              Cigarrillos, tabaco, accesorios y productos de farmacia al por
-              mayor. Hacé tu pedido en minutos y lo recibís en tu local.
+              Todo el catálogo al por mayor en un solo lugar. Hacé tu pedido
+              en minutos y lo recibís en tu local.
             </p>
           </div>
 
@@ -53,15 +53,15 @@ export function HeroCarousel() {
                   Hoja de ruta
                 </span>
                 <span className="font-mono text-[11px] text-background/50">
-                  #DC-001
+                  #PED-001
                 </span>
               </div>
 
               <dl className="mt-4 space-y-4">
                 {[
                   { icon: Package, label: "Stock", value: "Amplio catálogo" },
-                  { icon: Truck, label: "Zona", value: "Mercedes y alrededores" },
-                  { icon: Clock, label: "Horario", value: "Lun–Vie · 8 a 18 h" },
+                  { icon: Truck, label: "Entrega", value: "Directa a tu local" },
+                  { icon: Clock, label: "Pedido", value: "Online, en minutos" },
                 ].map(({ icon: Icon, label, value }) => (
                   <div key={label} className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--brand)]/15">

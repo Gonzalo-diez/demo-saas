@@ -8,7 +8,7 @@ type PageProps = {
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: "Editar pedido | Distri Choco",
+    title: "Editar pedido",
     description: "Agregá o quitá productos de tu pedido.",
     robots: { index: false, follow: false },
   };

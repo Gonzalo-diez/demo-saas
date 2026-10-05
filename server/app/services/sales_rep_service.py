@@ -8,7 +8,7 @@ from app.constants.sales_rep_constant import (
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.repositories.sales_rep_repository import SalesRepRepository
 from app.schemas.sales_rep_schema import SalesRepCreate, SalesRepLogin, SalesRepUpdate
-from app.utils.geo import compute_h3_coverage, validate_coordinates, compute_h3
+from app.utils.geo import validate_coordinates, compute_h3
 from app.models.sales_rep_model import SalesRep
 
 class SalesRepService:
@@ -120,62 +120,6 @@ class SalesRepService:
             "total_pages": total_pages,
         }
         
-    def get_sales_reps_for_map(
-        self,
-        lat: float | None = None,
-        lng: float | None = None,
-        radius_km: float | None = None,
-        search: str | None = None,
-        is_active: bool | None = None,
-    ):
-        # El filtro geográfico es opcional y complementario: si no se
-        # envía ninguno de los tres campos, se devuelven todos los
-        # vendedores (con coordenadas cargadas). Si se envía alguno,
-        # deben venir los tres juntos.
-        geo_fields_present = [
-            field is not None for field in (lat, lng, radius_km)
-        ]
-
-        if any(geo_fields_present) and not all(geo_fields_present):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="lat, lng y radius_km deben enviarse juntos para filtrar por zona",
-            )
-
-        h3_indexes = None
-
-        if all(geo_fields_present):
-            try:
-                validate_coordinates(lat, lng)
-
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=str(e),
-                )
-
-            if radius_km <= 0:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="radius_km debe ser mayor a 0",
-                )
-
-            h3_indexes = compute_h3_coverage(
-                lat=lat,
-                lng=lng,
-                radius_km=radius_km,
-            )
-
-        sales_reps = self.repo.get_sales_reps_for_map(
-            search=search,
-            is_active=is_active,
-            h3_indexes=h3_indexes,
-        )
-
-        return {
-            "sales_reps": sales_reps,
-        }
-
     def create(
         self,
         data: SalesRepCreate,

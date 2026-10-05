@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import type { Category } from "@/types/categories";
+import type { ShopCategory } from "@/features/shop/categories/types";
 import { getProductsResponse } from "@/features/shop/products/apis/product-shop-api";
 import { mapApiProductToProduct } from "@/features/shop/products/mappers";
 import { getBrandOptions } from "@/lib/utils/get-filter-options";
@@ -15,7 +15,7 @@ import { CatalogPagination } from "@/features/shop/products/components/catalog-p
 import { CatalogCategoryClient } from "@/app/(shop)/catalogo/[slug]/catalog-category-client";
 
 type Props = {
-  category: Category;
+  category: ShopCategory;
 };
 
 type ValidSort = "name-asc" | "name-desc" | "price-asc" | "price-desc";
@@ -51,7 +51,7 @@ export function CatalogCategoryPageClient({ category }: Props) {
     queryKey: [
       "shop-products",
       "category",
-      category.value,
+      category.id,
       search,
       brand,
       validSort,
@@ -60,7 +60,7 @@ export function CatalogCategoryPageClient({ category }: Props) {
     queryFn: () =>
       getProductsResponse({
         is_active: true,
-        category: category.value,
+        category_id: category.id,
         search,
         brand,
         sort: validSort,
@@ -70,11 +70,11 @@ export function CatalogCategoryPageClient({ category }: Props) {
   });
 
   const filtersQuery = useQuery({
-    queryKey: ["shop-products", "category-all", category.value],
+    queryKey: ["shop-products", "category-all", category.id],
     queryFn: () =>
       getProductsResponse({
         is_active: true,
-        category: category.value,
+        category_id: category.id,
         page: 1,
         page_size: 100,
       }),
@@ -107,7 +107,7 @@ export function CatalogCategoryPageClient({ category }: Props) {
   if (!response || !filtersQuery.data) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-        <div className="rounded-2xl border border-dashed bg-card p-8 text-center">
+        <div className="rounded-3xl border border-dashed bg-card p-8 text-center">
           <h2 className="text-lg font-semibold">No pudimos cargar el catálogo</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Probá recargando la página en unos segundos.

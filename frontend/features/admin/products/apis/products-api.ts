@@ -1,10 +1,9 @@
-import { API_URL } from "@/lib/api";
+import { getApiUrl } from "@/lib/api";
 import { apiFetch, apiFetchBlob } from "@/lib/fetcher";
 import type {
   CreateProductInput,
   PaginatedProductsResponse,
   Product,
-  ProductCategoriesResponse,
   ProductImportCommitRequest,
   ProductImportCommitResponse,
   ProductImportPreviewResponse,
@@ -65,12 +64,6 @@ export async function getProductsApi(params: ProductsQueryParams = {}) {
   });
 }
 
-export async function getProductCategoriesApi() {
-  return apiFetch<ProductCategoriesResponse>("/api/products/categories", {
-    method: "GET",
-  });
-}
-
 export async function getProductApi(productId: number) {
   return apiFetch<Product>(`/api/products/${productId}`, {
     method: "GET",
@@ -108,6 +101,14 @@ export async function toggleProductStatusApi(
   return apiFetch<Product>(endpoint, {
     method: "PATCH",
   });
+}
+
+/** Publica / oculta un producto del catálogo de la tienda (no toca su stock ni su estado). */
+export async function setProductPublicApi(productId: number, isPublic: boolean) {
+  return apiFetch<Product>(
+    `/api/products/${productId}/${isPublic ? "publish" : "unpublish"}`,
+    { method: "PATCH" },
+  );
 }
 
 /**
@@ -164,7 +165,7 @@ export async function generateImportExcelFromPdfApi(file: File): Promise<Blob> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${API_URL}/api/products/import/from-pdf`, {
+  const response = await fetch(`${getApiUrl()}/api/products/import/from-pdf`, {
     method: "POST",
     credentials: "include",
     body: formData,

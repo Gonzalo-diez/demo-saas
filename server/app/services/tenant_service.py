@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.tenant_model import Tenant
 from app.repositories.tenant_repository import TenantRepository
+from app.core.cors import invalidate_tenant_domains_cache
 from app.db.tenant_context import tenant_scope
 from app.schemas.sales_rep_schema import SalesRepCreate
 from app.schemas.tenant_schema import TenantCreate, TenantProvision, TenantUpdate
@@ -35,6 +36,18 @@ class TenantService:
             )
         return tenant
 
+    def get_by_domain(self, domain: str) -> Tenant:
+        try:
+            tenant = self.repository.get_by_domain(domain)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No hay una tienda para el dominio '{domain}'",
+            )
+        return tenant
+
     def get_tenants(
         self,
         page: int = 1,
@@ -63,6 +76,14 @@ class TenantService:
                 detail=f"El slug '{data.slug}' ya está en uso",
             )
 
+        # Validación de negocio: un dominio pertenece a una sola distribuidora
+        # (de ahí se resuelve el tenant de cada visita a la tienda).
+        if self.repository.get_by_domain(data.domain):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El dominio '{data.domain}' ya está en uso por otra distribuidora",
+            )
+
         # Validación de negocio: Nombre único
         if self.repository.get_by_name(data.name):
             raise HTTPException(
@@ -76,6 +97,7 @@ class TenantService:
         tenant = self.repository.create(data, refresh=False)
         self.db.commit()
         self.db.refresh(tenant)
+        invalidate_tenant_domains_cache()
         return tenant
 
     def provision(self, data: TenantProvision) -> Tenant:
@@ -114,6 +136,7 @@ class TenantService:
             raise
 
         self.db.refresh(tenant)
+        invalidate_tenant_domains_cache()
         return tenant
 
     # ------------------------------------------------------------------
@@ -131,6 +154,15 @@ class TenantService:
                     detail=f"El slug '{data.slug}' ya está en uso",
                 )
 
+        # Validación de negocio: Validar duplicado de dominio solo si cambió
+        if data.domain is not None and data.domain != tenant.domain:
+            other = self.repository.get_by_domain(data.domain)
+            if other is not None and other.id != tenant.id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"El dominio '{data.domain}' ya está en uso por otra distribuidora",
+                )
+
         # Validación de negocio: Validar duplicado de nombre solo si cambió
         if data.name is not None and data.name.strip().lower() != tenant.name.lower():
             if self.repository.get_by_name(data.name):
@@ -142,6 +174,7 @@ class TenantService:
         updated_tenant = self.repository.update(tenant, data, refresh=False)
         self.db.commit()
         self.db.refresh(updated_tenant)
+        invalidate_tenant_domains_cache()
         return updated_tenant
 
     # ------------------------------------------------------------------
@@ -157,6 +190,7 @@ class TenantService:
         activated_tenant = self.repository.activate(tenant, refresh=False)
         self.db.commit()
         self.db.refresh(activated_tenant)
+        invalidate_tenant_domains_cache()
         return activated_tenant
 
     def deactivate(self, tenant_id: int) -> Tenant:
@@ -168,4 +202,5 @@ class TenantService:
         deactivated_tenant = self.repository.deactivate(tenant, refresh=False)
         self.db.commit()
         self.db.refresh(deactivated_tenant)
+        invalidate_tenant_domains_cache()
         return deactivated_tenant

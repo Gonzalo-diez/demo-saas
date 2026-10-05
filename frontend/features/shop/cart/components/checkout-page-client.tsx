@@ -4,12 +4,18 @@ import Link from "next/link";
 import { useCartStore } from "@/store/cart-store";
 import { QuantityStepper } from "@/features/shop/products/components/quantity-stepper";
 import { CheckoutForm } from "@/features/shop/cart/components/checkout-form";
+import { ClientAuthPanel } from "@/features/shop/auth/components/auth-panel";
+import { useClientSession } from "@/features/shop/auth/hooks/use-session";
 
 export function CheckoutPageClient() {
   const items = useCartStore((s) => s.items);
   const addItem = useCartStore((s) => s.addItem);
   const decreaseItem = useCartStore((s) => s.decreaseItem);
   const deleteItem = useCartStore((s) => s.deleteItem);
+
+  // Mirar el catálogo y armar el carrito no pide cuenta: se la pedimos recién acá,
+  // al finalizar la compra. Con cuenta aparece el formulario del pedido.
+  const { data: client, isLoading: isSessionLoading } = useClientSession();
 
   const isEmpty = items.length === 0;
   const total = items.reduce(
@@ -28,7 +34,7 @@ export function CheckoutPageClient() {
         </div>
 
         <Link
-          href="/"
+          href="/catalogo"
           className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
         >
           Seguir comprando
@@ -43,7 +49,7 @@ export function CheckoutPageClient() {
           </p>
 
           <Link
-            href="/"
+            href="/catalogo"
             className="mt-6 inline-flex rounded-md bg-primary px-5 py-3 text-sm font-medium text-primary-foreground"
           >
             Ir al catálogo
@@ -108,7 +114,28 @@ export function CheckoutPageClient() {
               </span>
             </div>
 
-            <CheckoutForm />
+            {isSessionLoading ? (
+              <div className="space-y-4 animate-pulse">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-12 w-full rounded-md bg-muted" />
+                ))}
+              </div>
+            ) : client ? (
+              <CheckoutForm />
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-base font-semibold">
+                    Creá tu cuenta para finalizar la compra
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Tu carrito queda guardado. Con tu cuenta podés confirmar el
+                    pedido y seguirlo después.
+                  </p>
+                </div>
+                <ClientAuthPanel defaultMode="register" redirectTo={null} />
+              </div>
+            )}
           </aside>
         </div>
       )}

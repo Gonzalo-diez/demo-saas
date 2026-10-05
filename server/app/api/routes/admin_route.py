@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import (
     APIRouter,
     Depends,
+    HTTPException,
     Request,
     Response,
     status,
@@ -24,6 +25,7 @@ from app.schemas.admin_schema import (
     AdminCreate,
     AdminLogin,
     AdminResponse,
+    AdminUpdate,
     MessageResponse,
 )
 from app.services.admin_service import AdminService
@@ -110,3 +112,39 @@ def create_admin(
     _: Admin = Depends(get_current_platform_admin),
 ):
     return AdminService(db).create(data)
+
+
+@router.patch(
+    "/users/{admin_id}",
+    response_model=AdminResponse,
+)
+def update_admin(
+    admin_id: int,
+    data: AdminUpdate,
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_current_platform_admin),
+):
+    if admin_id == current.id and data.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No podés desactivarte a vos mismo",
+        )
+    return AdminService(db).update(admin_id, data)
+
+
+@router.delete(
+    "/users/{admin_id}",
+    response_model=MessageResponse,
+)
+def delete_admin(
+    admin_id: int,
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_current_platform_admin),
+):
+    if admin_id == current.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No podés eliminarte a vos mismo",
+        )
+    AdminService(db).delete(admin_id)
+    return {"message": "Administrador eliminado correctamente"}

@@ -1,13 +1,3 @@
-ALLOWED_CATEGORIES = [
-    "analgesicos",
-    "cigarrillos eco",
-    "masalin bat",
-    "tabaco accesorios",
-    "pegamentos",
-    "pilas",
-    "preservativos",
-]
-
 ALLOWED_SORT_FIELDS = {
     "name-asc",
     "name-desc",

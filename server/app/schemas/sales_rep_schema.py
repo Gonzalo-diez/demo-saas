@@ -90,21 +90,6 @@ class SalesRepResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
     
-class SalesRepMapItem(BaseModel):
-    id: int
-    name: str
-    home_lat: float | None
-    home_lng: float | None
-    coverage_radius_km: float | None
-    home_h3_index: str | None
-
-    model_config = ConfigDict(from_attributes=True)
-    
-class SalesRepMapResponse(BaseModel):
-    sales_reps: list[SalesRepMapItem] = Field(default_factory=list)
-
-    model_config = ConfigDict(from_attributes=True)
-    
 class SalesRepListResponse(BaseModel):
     sales_reps: list[SalesRepResponse] = Field(default_factory=list)
     total: int

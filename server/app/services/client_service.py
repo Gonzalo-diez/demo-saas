@@ -14,8 +14,7 @@ from app.schemas.client_schema import (
     ClientCreate,
     ClientListResponse,
     ClientLogin,
-    ClientMapItem,
-    ClientMapResponse,
+    ClientRegister,
     ClientResponse,
     ClientUpdate,
 )
@@ -45,6 +44,36 @@ class ClientService:
             tenant_id=client.tenant_id,
         )
 
+        return client, access_token
+
+    def register(self, data: ClientRegister) -> tuple[Client, str]:
+        """
+        Autoregistro desde la tienda pública: crea el cliente en el tenant de la sesión
+        y devuelve también su token, para que siga con la compra ya logueado.
+        El email es único por distribuidora.
+        """
+        if self.repository.get_by_email(data.email):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ya existe una cuenta con ese correo electrónico. Iniciá sesión para continuar.",
+            )
+
+        client = self.create_client(
+            ClientCreate(
+                name=data.name,
+                email=data.email,
+                phone=data.phone,
+                tax_id=data.tax_id,
+                client_type=data.client_type,
+                password=data.password,
+            )
+        )
+
+        access_token = create_access_token(
+            subject=str(client.id),
+            token_type="client",
+            tenant_id=client.tenant_id,
+        )
         return client, access_token
 
     def get_client_or_404(self, client_id: int) -> Client:
@@ -128,43 +157,6 @@ class ClientService:
         client = self.get_client_or_404(client_id)
         updated_client = self.repository.activate(client)
         return ClientResponse.model_validate(updated_client)
-
-    def get_clients_for_map(
-        self,
-        search: str | None = None,
-        sales_rep_id: int | None = None,
-        is_active: bool | None = None,
-    ) -> ClientMapResponse:
-        branches = self.repository.get_clients_for_map(
-            search=search,
-            sales_rep_id=sales_rep_id,
-            is_active=is_active,
-        )
-
-        items = [
-            ClientMapItem(
-                client_id=branch.client.id,
-                client_name=branch.client.name,
-                client_type=branch.client.client_type,
-                tax_id=branch.client.tax_id,
-                sales_rep_id=branch.client.sales_rep_id,
-                sales_rep_name=branch.client.sales_rep.name
-                if branch.client.sales_rep
-                else None,
-                branch_id=branch.id,
-                branch_name=branch.name,
-                branch_address=branch.address,
-                branch_city=branch.city,
-                branch_is_main=branch.is_main,
-                h3_index=branch.h3_index,
-                lat=float(branch.lat),
-                lng=float(branch.lng),
-                is_active=branch.is_active,
-            )
-            for branch in branches
-        ]
-
-        return ClientMapResponse(clients=items)
 
     def list_client_branches(self, client_id: int) -> list[ClientBranchResponse]:
         self.get_client_or_404(client_id)

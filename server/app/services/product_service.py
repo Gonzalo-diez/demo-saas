@@ -1,8 +1,10 @@
+from datetime import date
 from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from decimal import Decimal
 from app.utils.slug import slugify
+from app.utils.pricing import price_from_markup
 from app.models.product_model import Product
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product_schema import (
@@ -12,24 +14,23 @@ from app.schemas.product_schema import (
     ProductResponse,
     ProductListResponse,
     ProductFiltersResponse,
-    ProductCategoriesResponse,
 )
 from app.schemas.product_import_schema import ProductImportRow
 from app.repositories.inventory_movement_repository import InventoryMovementRepository
 from app.services.inventory_movement_service import InventoryMovementService
+from app.services.product_purchase_service import ProductPurchaseService
 from app.services.notification_alert_service import NotificationAlertService
-from app.utils.category_normalizer import (
-    is_catalog_category,
-    get_catalog_category_options,
-    get_catalog_category_aliases,
-)
+from app.models.category_model import Category
+from app.repositories.category_repository import CategoryRepository
 
 class ProductService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = ProductRepository(db)
+        self.category_repo = CategoryRepository(db)
         self.inventory_movement_repo = InventoryMovementRepository(db)
         self.inventory_movement_service = InventoryMovementService(db)
+        self.purchase_history = ProductPurchaseService(db)
         
     def _sync_stock_alert(self, product: Product) -> None:
         """Recalcula el aviso de stock del producto (bajo / cerca del mínimo / sin stock)."""
@@ -50,7 +51,21 @@ class ProductService:
             "-"
         }
         
-    def _is_product_complete(self, data: dict) -> bool:
+    @staticmethod
+    def _is_publicly_visible(is_public: bool, category: Category | None) -> bool:
+        """¿Un cliente lo vería en el catálogo? (publicado y su categoría, si tiene, también)."""
+        return bool(is_public) and (category is None or category.is_public)
+
+    def _resolve_category(self, *, category_id: int | None, category_name: str | None) -> Category | None:
+        """Valida/resuelve la categoría pedida (404 si el id no existe en este tenant)."""
+        try:
+            return self.category_repo.resolve_for_product(
+                category_id=category_id, category_name=category_name
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    def _is_product_complete(self, data: dict, category_obj: Category | None = None) -> bool:
         name = (data.get("name") or "").strip()
 
         brand = (data.get("brand") or "").strip().lower()
@@ -75,16 +90,15 @@ class ProductService:
         if brand in invalid_brands or category in invalid_categories:
             return False
 
-        if is_catalog_category(category_raw):
-            # Categoría "seteada" de catálogo: exige imagen, porque este
-            # producto va a mostrarse en la tienda online.
+        if self._is_publicly_visible(data.get("is_public", True), category_obj):
+            # Se va a mostrar en el catálogo de clientes: exige imagen.
             return has_image
 
-        # Categoría libre/interna: no va al catálogo, así que no exige
-        # imagen. Puede quedar completo/activo igual para venta B2B.
+        # Privado (producto o categoría no públicos): no va al catálogo, así que
+        # no exige imagen. Puede quedar completo/activo igual para venta B2B.
         return True
 
-    def _determine_product_state_import(self, data: dict) -> tuple[bool, str]:
+    def _determine_product_state_import(self, data: dict, category_obj: Category | None = None) -> tuple[bool, str]:
         category_raw = data.get("category")
         category = (category_raw or "").strip().lower()
 
@@ -93,21 +107,21 @@ class ProductService:
         if is_uncategorized:
             return False, "DRAFT"
 
-        if is_catalog_category(category_raw):
+        if self._is_publicly_visible(data.get("is_public", True), category_obj):
             has_image = self._has_valid_image(data.get("image_url"))
             is_active = has_image
         else:
-            # Categoría libre/interna: no exige imagen, se importa activo
-            # (disponible para venta B2B) directamente.
+            # Categoría privada (la que se crea sola al importar): no exige imagen,
+            # se importa activo (disponible para venta B2B) directamente.
             is_active = True
 
         status = "ACTIVE" if is_active else "DRAFT"
 
         return is_active, status
 
-    def _get_product_or_404(self, product_id: int) -> Product:
+    def _get_product_or_404(self, product_id: int, catalog_only: bool = False) -> Product:
         """Helper interno para validar existencia."""
-        product = self.repo.get_product_by_id(product_id)
+        product = self.repo.get_product_by_id(product_id, catalog_only=catalog_only)
         if not product:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -125,6 +139,8 @@ class ProductService:
         page_size: int = 20,
         sort: Optional[str] = None,
         catalog_only: bool = False,
+        category_id: Optional[int] = None,
+        is_public: Optional[bool] = None,
     ) -> ProductListResponse:
         """
         Lista productos con filtros aplicados.
@@ -138,6 +154,8 @@ class ProductService:
             page_size=page_size,
             sort=sort,
             catalog_only=catalog_only,
+            category_id=category_id,
+            is_public=is_public,
         )
 
         return ProductListResponse(
@@ -147,9 +165,9 @@ class ProductService:
             page_size=page_size,
         )
 
-    def get_product(self, product_id: int) -> Product:
-        """Retorna un producto o 404."""
-        return self._get_product_or_404(product_id)
+    def get_product(self, product_id: int, catalog_only: bool = False) -> Product:
+        """Retorna un producto o 404. catalog_only: solo si un cliente puede verlo."""
+        return self._get_product_or_404(product_id, catalog_only=catalog_only)
     
     def get_or_create_by_sku(
         self,
@@ -184,7 +202,8 @@ class ProductService:
     def create_product(
         self,
         *,
-        product_in: ProductCreateAdmin
+        product_in: ProductCreateAdmin,
+        created_by: int | None = None,
     ) -> Product:
 
         if product_in.sku:
@@ -203,7 +222,28 @@ class ProductService:
 
         data = product_in.model_dump()
 
+        category = self._resolve_category(
+            category_id=data.get("category_id"),
+            category_name=data.get("category"),
+        )
+        data["category_id"] = category.id if category else None
+        data["category"] = category.name if category else None
+
         initial_stock = Decimal(str(data.get("stock_current") or 0))
+
+        # El vencimiento (si viene) es del stock inicial y queda en el historial de compras.
+        expiry_date = data.pop("expiry_date", None)
+        if expiry_date is not None:
+            if initial_stock <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Para cargar un vencimiento necesitás indicar el stock inicial.",
+                )
+            if expiry_date < date.today():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El vencimiento no puede ser anterior a hoy.",
+                )
 
         data["stock_current"] = 0
 
@@ -212,7 +252,7 @@ class ProductService:
 
         product_data = ProductCreateAdmin(**data)
 
-        is_complete = self._is_product_complete(data)
+        is_complete = self._is_product_complete(data, category)
 
         if not is_complete:
             raise HTTPException(
@@ -237,6 +277,19 @@ class ProductService:
                 quantity=initial_stock,
                 reference_type="manual_adjustment",
                 notes=f"Stock inicial producto {product.name}",
+            )
+
+            # Primera entrada del historial de compras del producto.
+            self.purchase_history.record(
+                product_id=product.id,
+                quantity=int(initial_stock),
+                unit_cost=product.unit_cost,
+                source="initial_stock",
+                markup_percent=product.markup_percent,
+                sale_price=product.unit_price,
+                expiry_date=expiry_date,
+                notes="Stock inicial",
+                created_by=created_by,
             )
 
         self._sync_stock_alert(product)
@@ -342,6 +395,13 @@ class ProductService:
                 # Costo Promedio Ponderado si entra nuevo stock
                 if incoming_stock > 0:
                     self.apply_weighted_average_cost(existing, incoming_stock, incoming_cost)
+                    self.purchase_history.record(
+                        product_id=existing.id,
+                        quantity=incoming_stock,
+                        unit_cost=incoming_cost,
+                        source="import",
+                        notes="Ingreso por importación Excel",
+                    )
 
                     self.inventory_movement_service.apply_movement(
                         product_id=existing.id,
@@ -365,19 +425,34 @@ class ProductService:
 
             else:
                 data = row.model_dump(exclude={"is_active"})
-                is_active, product_status = self._determine_product_state_import(data)
+                category = self.category_repo.resolve_for_product(
+                    category_id=None, category_name=data.get("category")
+                )
+                data["category_id"] = category.id if category else None
+                is_active, product_status = self._determine_product_state_import(data, category)
                 data["is_active"] = is_active
 
                 new_prod = ProductCreateDraft(**data)
                 prod_db  = self.repo.create_product_no_commit(new_prod)
                 prod_db.status = product_status
 
-                if prod_db.stock_current > 0:
+                incoming_stock = prod_db.stock_current or 0
+                if incoming_stock > 0:
+                    # El producto nace con stock 0 y el movimiento lo carga: antes nacía con
+                    # el stock de la fila y el movimiento lo sumaba otra vez (stock duplicado).
+                    prod_db.stock_current = 0
                     self.inventory_movement_service.apply_movement(
                         product_id=prod_db.id,
                         movement_type="initial_stock",
-                        quantity=prod_db.stock_current,
+                        quantity=incoming_stock,
                         reference_type="import",
+                        notes="Stock inicial por importación Excel",
+                    )
+                    self.purchase_history.record(
+                        product_id=prod_db.id,
+                        quantity=incoming_stock,
+                        unit_cost=prod_db.unit_cost,
+                        source="import",
                         notes="Stock inicial por importación Excel",
                     )
 
@@ -400,15 +475,44 @@ class ProductService:
                     current_product_id=product_id  # ⚠️ ojo acá, no exclude_id
                 )
 
+        clear_markup = False
+
+        # Remarque sin precio explícito: el precio se recalcula sobre el costo (nuevo o actual).
+        if update_data.get("markup_percent") is not None and update_data.get("unit_price") is None:
+            cost = update_data.get("unit_cost")
+            if cost is None:
+                cost = db_obj.unit_cost or 0
+            update_data["unit_price"] = price_from_markup(cost, update_data["markup_percent"])
+        elif (
+            update_data.get("unit_price") is not None
+            and "markup_percent" not in update_data
+            and Decimal(str(update_data["unit_price"])) != Decimal(str(db_obj.unit_price or 0))
+        ):
+            # Precio cambiado a mano: el remarque guardado deja de ser verdad. (Si el precio
+            # es el mismo -ej. se editó otro campo y el form lo reenvió- el remarque se conserva.)
+            clear_markup = True
+
+        # Categoría resultante: la nueva (por id o por nombre) o la que ya tenía.
+        if "category_id" in update_data or "category" in update_data:
+            category = self._resolve_category(
+                category_id=update_data.get("category_id"),
+                category_name=update_data.get("category"),
+            )
+            update_data["category_id"] = category.id if category else None
+            update_data["category"] = category.name if category else "Sin Clasificar"
+        else:
+            category = db_obj.category_rel
+
         # Merge entre estado actual + update
         current_data = {
             "name": update_data.get("name", db_obj.name),
             "brand": update_data.get("brand", db_obj.brand),
             "category": update_data.get("category", db_obj.category),
             "image_url": update_data.get("image_url", db_obj.image_url),
+            "is_public": update_data.get("is_public", db_obj.is_public),
         }
 
-        is_complete = self._is_product_complete(current_data)
+        is_complete = self._is_product_complete(current_data, category)
 
         update_data["is_active"] = is_complete
         update_data["status"] = "ACTIVE" if is_complete else "DRAFT"
@@ -417,6 +521,10 @@ class ProductService:
         obj_in = ProductUpdate(**update_data)
 
         product = self.repo.update_product(product=db_obj, product_in=obj_in)
+        if clear_markup:
+            # El repo descarta los None, por eso el remarque se borra acá.
+            product.markup_percent = None
+            self.db.flush()
         self._sync_stock_alert(product)
         return product
 
@@ -450,17 +558,6 @@ class ProductService:
         filters = self.repo.get_product_filters(catalog_only=catalog_only)
         return ProductFiltersResponse(**filters)
 
-    def get_category_options(self) -> ProductCategoriesResponse:
-        """
-        Opciones para el selector de categoría del admin: las de catálogo
-        (visibles online) y las libres ya existentes (solo B2B).
-        """
-        return ProductCategoriesResponse(
-            catalog=get_catalog_category_options(),
-            free=self.repo.get_free_categories(),
-            catalog_aliases=get_catalog_category_aliases(),
-        )
-
     def deactivate_product(self, product_id: int) -> Product:
         db_obj = self._get_product_or_404(product_id)
 
@@ -491,7 +588,8 @@ class ProductService:
             "brand": db_obj.brand,
             "category": db_obj.category,
             "image_url": db_obj.image_url,
-        })
+            "is_public": db_obj.is_public,
+        }, db_obj.category_rel)
 
         if not is_complete:
             raise HTTPException(
@@ -504,4 +602,19 @@ class ProductService:
 
         self._sync_stock_alert(db_obj)
 
+        return db_obj
+
+    def set_public(self, product_id: int, is_public: bool) -> Product:
+        """Publica / despublica el producto en el catálogo de clientes."""
+        db_obj = self._get_product_or_404(product_id)
+
+        if is_public and self._is_publicly_visible(True, db_obj.category_rel):
+            if not self._has_valid_image(db_obj.image_url):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Para publicar un producto en el catálogo necesita una imagen.",
+                )
+
+        db_obj.is_public = is_public
+        self.db.flush()
         return db_obj

@@ -4,7 +4,6 @@ import {
   ClientImportCommitResponse,
   ClientImportPreviewResponse,
   type Client,
-  type ClientMapResponse,
   type ClientsQueryParams,
   type ClientsResponse,
   type CreateClientInput,
@@ -117,11 +116,5 @@ export async function activateClientApi(clientId: number) {
 export async function deactivateClientApi(clientId: number) {
   return apiFetch<Client>(`/api/clients/${clientId}/deactivate`, {
     method: "PATCH",
-  });
-}
-
-export async function getClientsMapApi() {
-  return apiFetch<ClientMapResponse>("/api/clients/map", {
-    method: "GET",
   });
 }

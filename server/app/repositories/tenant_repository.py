@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.tenant_model import Tenant
 from app.schemas.tenant_schema import TenantCreate, TenantUpdate
+from app.utils.domain import domain_candidates
 
 
 class TenantRepository:
@@ -20,6 +21,17 @@ class TenantRepository:
     def get_by_slug(self, slug: str) -> Tenant | None:
         stmt = select(Tenant).where(Tenant.slug == slug)
         return self.db.scalar(stmt)
+
+    def get_by_domain(self, domain: str) -> Tenant | None:
+        """
+        Tenant dueño de un host. Acepta dominio o URL; si no hay coincidencia exacta
+        prueba la variante con/sin "www." (ValueError si no es un host válido).
+        """
+        for candidate in domain_candidates(domain):
+            tenant = self.db.scalar(select(Tenant).where(Tenant.domain == candidate))
+            if tenant is not None:
+                return tenant
+        return None
 
     def get_by_name(self, name: str) -> Tenant | None:
         stmt = select(Tenant).where(Tenant.name.ilike(name.strip()))
@@ -43,6 +55,7 @@ class TenantRepository:
             search_filter = or_(
                 Tenant.name.ilike(search_term),
                 Tenant.slug.ilike(search_term),
+                Tenant.domain.ilike(search_term),
             )
             stmt = stmt.where(search_filter)
             count_stmt = count_stmt.where(search_filter)

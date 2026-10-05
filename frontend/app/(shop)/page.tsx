@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { HeroCarousel } from "@/components/home/hero-carousel";
 
 export const metadata: Metadata = {
-  title: "Distri Choco - Distribuidora mayorista",
+  title: "Catálogo mayorista",
   description:
-    "Distri Choco: distribuidora mayorista de cigarrillos, tabaco, farmacia y accesorios. Pedidos rápidos y entrega directa.",
+    "Catálogo mayorista online para comercios. Pedidos rápidos y entrega directa.",
 };
 
 export default function HomePage() {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Power, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { History, Pencil, Power, RotateCcw } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,8 @@ import type { Product, ProductStatusFilter } from "@/features/admin/products/typ
 import { useToggleProductStatus } from "@/features/admin/products/hooks/use-toggle-product-status";
 import { EditProductDialog } from "@/features/admin/products/components/edit-product-dialog";
 import { ProductActiveBadge } from "@/features/admin/products/components/product-active-badge";
+import { ProductVisibilityBadge } from "@/features/admin/products/components/product-visibility-badge";
+import { ProductVisibilityButton } from "@/features/admin/products/components/product-visibility-button";
 import { ProductStatusBadge } from "@/features/admin/products/components/product-status-badge";
 
 type ProductsTableProps = {
@@ -84,7 +87,10 @@ export function ProductsTable({ products }: ProductsTableProps) {
                       </p>
                     </div>
 
-                    <ProductActiveBadge isActive={product.is_active} />
+                    <div className="flex flex-col items-end gap-1.5">
+                      <ProductActiveBadge isActive={product.is_active} />
+                      <ProductVisibilityBadge isPublic={product.is_public} />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
@@ -118,6 +124,19 @@ export function ProductsTable({ products }: ProductsTableProps) {
                       <Pencil className="mr-2 h-4 w-4" />
                       Editar
                     </Button>
+
+                    <Button asChild variant="outline" className="w-full sm:flex-1">
+                      <Link href={`/admin/products/${product.id}/purchases`}>
+                        <History className="mr-2 h-4 w-4" />
+                        Compras
+                      </Link>
+                    </Button>
+
+                    <ProductVisibilityButton
+                      product={product}
+                      size="default"
+                      className="w-full sm:flex-1"
+                    />
 
                     {product.is_active ? (
                       <AlertDialog>
@@ -200,6 +219,7 @@ export function ProductsTable({ products }: ProductsTableProps) {
                     <TableHead className="text-right">Stock actual</TableHead>
                     <TableHead className="text-right">Stock mínimo</TableHead>
                     <TableHead>Activo/Inactivo</TableHead>
+                    <TableHead>Catálogo</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
@@ -232,6 +252,9 @@ export function ProductsTable({ products }: ProductsTableProps) {
                           <ProductActiveBadge isActive={product.is_active} />
                         </TableCell>
                         <TableCell>
+                          <ProductVisibilityBadge isPublic={product.is_public} />
+                        </TableCell>
+                        <TableCell>
                           <ProductStatusBadge
                             status={
                               product.status.toLowerCase() as ProductStatusFilter
@@ -249,6 +272,15 @@ export function ProductsTable({ products }: ProductsTableProps) {
                               <Pencil className="mr-2 h-4 w-4" />
                               Editar
                             </Button>
+
+                            <Button asChild type="button" variant="outline" size="sm">
+                              <Link href={`/admin/products/${product.id}/purchases`}>
+                                <History className="mr-2 h-4 w-4" />
+                                Compras
+                              </Link>
+                            </Button>
+
+                            <ProductVisibilityButton product={product} />
 
                             {product.is_active ? (
                               <AlertDialog>
